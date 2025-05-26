@@ -5,6 +5,9 @@ from datetime import datetime
 from collections import defaultdict
 from bs4 import BeautifulSoup
 
+"""
+먼저 pip install crawl4ai, playwright install 해주세요~
+"""
 
 # 수집 대상 seed URL
 SEED_URLS = [
