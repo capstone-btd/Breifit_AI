@@ -1,0 +1,156 @@
+from .base_collector import BaseCollector
+import aiohttp # aiohttp.ClientSession 사용을 위해 추가
+from bs4 import BeautifulSoup
+import yaml # 설정 파일 로드를 위해 추가
+import os # 파일 경로 처리를 위해 추가
+
+# 프로젝트 루트 경로 설정 (BaseCollector와 유사하게)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+DEFAULT_CONFIG_PATH = os.path.join(PROJECT_ROOT, 'configs', 'news_sites.yaml')
+
+class YonhapCollector(BaseCollector):
+    def __init__(self, config_path=DEFAULT_CONFIG_PATH):
+        # 설정 파일에서 base_url 로드
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config_data = yaml.safe_load(f)
+            site_config = config_data['sites']['yonhap']
+            base_url = site_config['base_url']
+        except Exception as e:
+            print(f"[YonhapCollector] 설정 파일 로드 오류 ({config_path}): {e}. 기본 base_url을 사용합니다.")
+            base_url = "https://www.yna.co.kr" # Fallback
+        
+        super().__init__(site_name="yonhap", base_url=base_url)
+        self.headers = { # BaseCollector에 headers가 없다면 여기서 정의
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+
+    async def fetch_article_links(self, session: aiohttp.ClientSession, category_url: str) -> list[dict]:
+        """
+        카테고리 페이지에서 개별 뉴스 기사 URL과 제목을 수집합니다.
+        """
+        article_infos = []
+        print(f"[{self.site_name}] Fetching links from {category_url}") # 콘솔 로그 추가
+        try:
+            async with session.get(category_url, headers=self.headers, timeout=30) as response:
+                response.raise_for_status()
+                html_content = await response.text()
+            
+            soup = BeautifulSoup(html_content, 'html.parser')
+            # 제공된 HTML 구조에 기반한 선택자 수정
+            article_list_container = soup.select_one('div.list-type212 ul.list01')
+
+            if article_list_container:
+                article_items = article_list_container.find_all('li', recursive=False) # 직접적인 li 자식들만
+                for item in article_items:
+                    link_tag = item.select_one('div.news-con strong.tit-wrap a.tit-news')
+                    if link_tag:
+                        href = link_tag.get('href')
+                        title_span = link_tag.find('span', class_='title01')
+                        title = title_span.get_text(strip=True) if title_span else link_tag.get_text(strip=True)
+
+                        if href and title:
+                            # 연합뉴스 기사 URL은 보통 /view/AKR... 형태를 가집니다.
+                            # 전체 URL로 변환하고, 유효성을 검사합니다.
+                            if not href.startswith('http'):
+                                full_url = self.base_url + href if href.startswith('/') else self.base_url + '/' + href
+                            else:
+                                full_url = href
+                            
+                            # 해당 사이트의 기사인지, 유효한 기사 URL 형식인지 확인
+                            if full_url.startswith(self.base_url) and '/view/AKR' in full_url:
+                                article_infos.append({'title': title, 'url': full_url})
+            
+            # 중복 제거 (URL 기준)
+            unique_articles = {info['url']: info for info in article_infos}.values()
+            article_infos = list(unique_articles)
+            print(f"[{self.site_name}] Found {len(article_infos)} news links from {category_url}") # news URLs -> news links
+
+        except aiohttp.ClientError as e:
+            print(f"[{self.site_name}] ClientError fetching links from {category_url}: {e}") # category -> links from
+        except asyncio.TimeoutError:
+            print(f"[{self.site_name}] Timeout fetching links from {category_url}") # category -> links from
+        except Exception as e:
+            print(f"[{self.site_name}] Error parsing links from {category_url}: {e}") # category -> links from
+            
+        return article_infos
+
+    async def fetch_article_content(self, session: aiohttp.ClientSession, article_url: str, original_title: str) -> dict | None:
+        """
+        개별 뉴스 기사 URL에서 제목, 본문, 작성일, 대표 이미지 등을 추출합니다.
+        """
+        try:
+            async with session.get(article_url, headers=self.headers, timeout=30) as response:
+                response.raise_for_status()
+                html_content = await response.text()
+            
+            soup = BeautifulSoup(html_content, 'html.parser')
+
+            title_tag = soup.find('h1', class_='title') # 연합뉴스 제목 선택자 예시
+            article_title = title_tag.get_text(strip=True) if title_tag else original_title
+
+            # 본문 추출 (선택자 확인 필요)
+            article_body_tag = soup.find('div', class_='story-news') 
+            if not article_body_tag:
+                 article_body_tag = soup.find('article', class_='story-news') # 다른 가능한 본문 컨테이너
+            
+            article_text = ""
+            if article_body_tag:
+                paragraphs = article_body_tag.find_all('p', recursive=False) # 직계 p 태그 우선, 너무 깊게 들어가지 않도록
+                if not paragraphs: # 직계 p가 없으면 모든 p 탐색
+                    paragraphs = article_body_tag.find_all('p')
+                for p in paragraphs:
+                    article_text += p.get_text(strip=True) + "\n"
+            else:
+                # 대체 본문 검색 로직 (예: class가 article_txt, content_txt 등)
+                alt_body = soup.select_one(".article_txt, .content_txt, #articleBody, #newsEndContents")
+                if alt_body:
+                    article_text = alt_body.get_text(separator="\n", strip=True)
+
+            if not article_text.strip(): # 본문이 비었으면 original_title이라도 넣어줌 (추후 수정)
+                print(f"[{self.site_name}] 본문 내용 없음: {article_url}")
+                article_text = original_title # 임시 처리
+
+            # 대표 이미지 URL 추출 (선택자 확인 필요)
+            main_image_url = None
+            og_image_tag = soup.find('meta', property='og:image')
+            if og_image_tag and og_image_tag.get('content'):
+                main_image_url = og_image_tag['content']
+            else:
+                # 기사 본문 내 첫번째 이미지 등 대체 로직
+                if article_body_tag:
+                    img_tag = article_body_tag.find('img')
+                    if img_tag and img_tag.get('src'):
+                        main_image_url = img_tag['src']
+                        if main_image_url.startswith('//'):
+                            main_image_url = 'https:' + main_image_url
+                        elif not main_image_url.startswith('http'):
+                             main_image_url = self.base_url + main_image_url if main_image_url.startswith('/') else self.base_url + "/" + main_image_url
+            
+            # 작성일 추출 (선택자 및 형식 변환 필요) - BaseCollector는 published_at을 요구하지 않음.
+            # time_tag = soup.select_one('p.update-time, span.poto_w_time, span.txt-time')
+            # published_at_text = time_tag.get_text(strip=True) if time_tag else "N/A"
+            # TODO: published_at_text를 표준 형식(YYYY-MM-DD HH:MM:SS)으로 변환
+
+            print(f"[{self.site_name}] Extracted content from {article_url}: Title='{article_title}'")
+            return {
+                'url': article_url,
+                'title': article_title.strip(),
+                'main_image_url': main_image_url,
+                'article_text': article_text.strip(),
+                'source': "yonhap"
+            }
+
+        except aiohttp.ClientError as e:
+            print(f"[{self.site_name}] Error fetching article {article_url}: {e}")
+        except asyncio.TimeoutError:
+            print(f"[{self.site_name}] Timeout fetching article {article_url}")
+        except Exception as e:
+            print(f"[{self.site_name}] Error parsing article {article_url}: {e}")
+
+        return None
+
+    # is_valid_news_url 메소드는 BaseCollector에 없으므로 여기서 사용하지 않거나, 
+    # 필요시 BaseCollector에 추가 또는 여기서 별도 로직으로 활용.
+    # def is_valid_news_url(self, url):
+    #     return '/view/AKR' in url 
