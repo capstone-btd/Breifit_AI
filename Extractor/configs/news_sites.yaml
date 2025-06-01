@@ -1,0 +1,113 @@
+sites:
+  cnn:
+    base_url: "https://edition.cnn.com"
+    categories:
+      world: "world"
+      business: "business"
+      markets: "markets"
+      health: "health"
+      entertainment: "entertainment"
+      tech: "tech"
+      style: "style"
+      travel: "travel"
+      sports: "sports"
+      science: "science"
+      climate: "climate"
+      weather: "weather"
+
+  bbc:
+    base_url: "https://www.bbc.com" # BBCCollector의 base_url과 일치
+    categories:
+      news: "news"  
+      sport: "sport" 
+      business: "business"
+      innovation: "innovation"
+      culture: "culture"   
+      arts: "culture/arts"  
+      travel: "travel" 
+      earth: "future-planet"
+
+  the_guardian:
+    base_url: "https://www.theguardian.com"
+    categories:
+      world: "world"
+      science: "science"
+      lifeandstyle: "uk/lifeandstyle"
+      culture: "uk/culture"
+      sport: "ut"
+      football: "football"
+      technology: "uk/technology"
+      business: "uk/business"
+  # Reuter, NPR, NYT는 안돼서 없애놨음
+  the_times:
+    base_url: "https://www.thetimes.co.uk"
+    categories:
+      world: "world"
+      life-style: "life-style" 
+      business-money: "business-money" 
+      sports: "sport"
+      culture: "culture"
+  #완료
+  yonhap:
+    base_url: "https://www.yna.co.kr"
+    categories:
+      politics: "politics/all"
+      economy: "economy/all" 
+      society: "society/all" 
+      local: "local/all" 
+      world: "international/all" 
+      culture: "culture/all" 
+      sports: "sports/all" 
+      it: "industry/technology-science" 
+
+  chosun:
+    base_url: "https://www.chosun.com"
+    categories:
+      politics: "politics" 
+      economy: "economy"
+      society: "national" 
+      world: "international" 
+      culture: "culture-style" 
+      sports: "sports" 
+
+  joongang:
+    base_url: "https://www.joongang.co.kr"
+    categories:
+      politics: "politics" 
+      economy: "money" 
+      society: "society" 
+      world: "world" 
+      culture: "culture" 
+      sports: "sports" 
+
+  donga:
+    base_url: "https://www.donga.com"
+    categories:
+      politics: "news/Politics" # 경로 대소문자 수정
+      economy: "news/Economy" 
+      society: "news/Society" 
+      world: "news/Inter" 
+      culture: "news/Culture" 
+      sports: "news/Sports" 
+
+  hankyoreh:
+    base_url: "https://www.hani.co.kr"
+    categories:
+      politics: "arti/politics" 
+      economy: "arti/economy" 
+      society: "arti/society" 
+      world: "arti/international" 
+      culture: "arti/culture" 
+      sports: "arti/sports" 
+      national: "arti/area"
+
+  kyunghyang:
+    base_url: "https://www.khan.co.kr"
+    categories:
+      politics: "politics" 
+      economy: "economy" 
+      society: "national" 
+      world: "world" 
+      culture: "culture" 
+      sports: "sports" 
+  
