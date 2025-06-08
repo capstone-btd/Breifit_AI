@@ -9,7 +9,6 @@ import os
 import sys
 from datetime import datetime
 import argparse
-import re # 정규표현식 모듈 추가
 
 # 언어 감지 및 번역을 위한 라이브러리 추가
 try:
@@ -97,7 +96,6 @@ async def run_collection_for_site(site_name: str, site_config: dict, collection_
         return
 
     total_articles_collected_for_site = 0
-    processed_articles_for_site = [] # 번역 등 처리된 기사를 담을 리스트
 
     for category_display_name, category_path_segment in categories_config.items():
         # print(f"카테고리 '{category_display_name.upper()}' 수집 시작 ({category_path_segment})...") # 원본 로그 위치 변경
@@ -133,63 +131,47 @@ async def run_collection_for_site(site_name: str, site_config: dict, collection_
             if not article or not article.get('title') or not article.get('url'):
                 print(f"경고: 필수 정보(제목 또는 URL)가 없는 기사가 있어 건너뜁니다: {article}")
                 continue
-            
-            current_article_data = article.copy() # 원본 article 데이터를 복사하여 사용
 
             # 언어 감지 및 번역 (article_text가 있는 경우)
-            original_article_text = current_article_data.get('article_text')
+            original_article_text = article.get('article_text')
             if original_article_text and translator_tokenizer and translator_model and translator_device:
                 try:
-                    # 언어 감지를 위해 특수 문자 일부 제거 (알파벳, 숫자, 한글, 공백 외 제거)
-                    # 너무 짧은 텍스트는 감지 정확도가 낮을 수 있음
-                    text_for_lang_detect = re.sub(r'[^A-Za-z0-9가-힣ㄱ-ㅎㅏ-ㅣ\s]', '', original_article_text)
-                    
-                    if not text_for_lang_detect.strip() or len(text_for_lang_detect.strip()) < 20: # 너무 짧으면 감지 시도 않음 (예: 20자 미만)
-                        print(f"'{current_article_data.get('title', '알 수 없는 제목')}' 기사 텍스트가 너무 짧거나 없어 언어 감지 건너뜀.")
-                        current_article_data['original_lang'] = 'unknown_too_short'
-                        current_article_data['is_translated'] = False
-                    else:
-                        detected_lang = detect_language(text_for_lang_detect)
-                        if detected_lang == 'en':
-                            print(f"'{current_article_data.get('title', '알 수 없는 제목')}' 기사 (영어) 번역 시도...")
-                            # 번역은 원본 텍스트(original_article_text)로 수행
-                            translated_text = await asyncio.to_thread(
-                                translate_english_to_korean_nllb,
-                                original_article_text, # 특수문자 제거 안된 원본으로 번역
-                                translator_tokenizer,
-                                translator_model,
-                                translator_device
-                            )
-                            if translated_text:
-                                current_article_data['article_text_ko'] = translated_text
-                                current_article_data['is_translated'] = True
-                                current_article_data['original_lang'] = 'en'
-                                print(f"'{current_article_data.get('title', '알 수 없는 제목')}' 기사 번역 완료.")
-                            else:
-                                print(f"'{current_article_data.get('title', '알 수 없는 제목')}' 기사 번역 실패.")
-                                current_article_data['is_translated'] = False
-                                current_article_data['original_lang'] = 'en' # 감지는 했으므로 기록
+                    detected_lang = detect_language(original_article_text)
+                    if detected_lang == 'en':
+                        print(f"'{article.get('title', '알 수 없는 제목')}' 기사 (영어) 번역 시도...")
+                        translated_text = await asyncio.to_thread(
+                            translate_english_to_korean_nllb,
+                            original_article_text,
+                            translator_tokenizer,
+                            translator_model,
+                            translator_device
+                        )
+                        if translated_text:
+                            article['article_text_ko'] = translated_text
+                            article['is_translated'] = True
+                            article['original_lang'] = 'en'
+                            print(f"'{article.get('title', '알 수 없는 제목')}' 기사 번역 완료.")
                         else:
-                            current_article_data['original_lang'] = detected_lang
-                            current_article_data['is_translated'] = False
+                            print(f"'{article.get('title', '알 수 없는 제목')}' 기사 번역 실패.")
+                            article['is_translated'] = False
+                            article['original_lang'] = 'en' # 감지는 했으므로 기록
+                    else:
+                        article['original_lang'] = detected_lang
+                        article['is_translated'] = False
 
                 except LangDetectException:
-                    print(f"'{current_article_data.get('title', '알 수 없는 제목')}' 기사의 언어를 감지할 수 없습니다. (전처리 후)")
-                    current_article_data['original_lang'] = 'unknown_langdetect_exception'
-                    current_article_data['is_translated'] = False
+                    print(f"'{article.get('title', '알 수 없는 제목')}' 기사의 언어를 감지할 수 없습니다.")
+                    article['original_lang'] = 'unknown'
+                    article['is_translated'] = False
                 except Exception as e:
-                    print(f"'{current_article_data.get('title', '알 수 없는 제목')}' 기사 처리 중 오류: {e}")
-                    current_article_data['original_lang'] = 'error_processing'
-                    current_article_data['is_translated'] = False
-            else: # original_article_text가 없거나 번역기 준비 안된 경우
-                if not original_article_text:
-                    current_article_data['original_lang'] = 'no_text'
-                current_article_data['is_translated'] = False
+                    print(f"'{article.get('title', '알 수 없는 제목')}' 기사 처리 중 오류: {e}")
+                    article['original_lang'] = 'error'
+                    article['is_translated'] = False
 
 
-            article_title_slug = slugify(current_article_data['title'])
+            article_title_slug = slugify(article['title'])
             if not article_title_slug:
-                url_path_parts = [part for part in current_article_data['url'].split('/') if part]
+                url_path_parts = [part for part in article['url'].split('/') if part]
                 if url_path_parts:
                     article_title_slug = slugify(url_path_parts[-1]) # URL의 마지막 경로 세그먼트
                     if not article_title_slug and len(url_path_parts) > 1:
@@ -205,7 +187,7 @@ async def run_collection_for_site(site_name: str, site_config: dict, collection_
                 filename=output_filename
             )
             
-            save_tasks.append(save_json_async(current_article_data, file_path)) # 수정된 current_article_data 저장
+            save_tasks.append(save_json_async(article, file_path))
             saved_count_for_category +=1
         
         await asyncio.gather(*save_tasks)

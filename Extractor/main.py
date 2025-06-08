@@ -2,9 +2,13 @@ import asyncio
 import json
 import os
 import subprocess
+import sys
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from typing import List, Dict, Any
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 app = FastAPI()
 
@@ -13,9 +17,8 @@ RUN_COLLECTION_SCRIPT_PATH = os.path.join(PROJECT_ROOT, "scripts", "run_collecti
 RAW_DATA_DIR = os.path.join(PROJECT_ROOT, "data", "raw")
 
 async def run_script():
-    """run_collection.py 스크립트를 실행합니다."""
     process = await asyncio.create_subprocess_exec(
-        "python", RUN_COLLECTION_SCRIPT_PATH,
+        sys.executable, RUN_COLLECTION_SCRIPT_PATH,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE
     )
@@ -71,4 +74,4 @@ async def collect_and_get_data():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    uvicorn.run(app, host="127.0.0.1", port=8000) 
