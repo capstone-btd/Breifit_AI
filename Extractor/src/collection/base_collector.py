@@ -10,6 +10,7 @@ class BaseCollector(ABC):
     def __init__(self, site_name, base_url):
         self.site_name = site_name
         self.base_url = base_url
+        self.timeout_seconds = 30 # 기본 타임아웃 30초로 설정
 
     @abstractmethod
     async def fetch_article_links(self, session: aiohttp.ClientSession, category_url: str) -> list[dict]:
@@ -20,11 +21,12 @@ class BaseCollector(ABC):
         pass
 
     @abstractmethod
-    async def fetch_article_content(self, session: aiohttp.ClientSession, article_url: str, original_title: str) -> dict | None:
+    async def fetch_article_content(self, session: aiohttp.ClientSession, article_url: str, original_title: str, category: str) -> dict | None:
         """
         개별 기사 URL에서 상세 내용을 추출합니다.
         original_title은 링크 목록에서 가져온 초기 제목입니다.
-        반환값: {'url': str, 'title': str, 'main_image_url': str | None, 'article_text': str} 형태의 딕셔너리
+        category는 현재 수집 중인 카테고리 명입니다.
+        반환값: {'url': str, 'title': str, 'main_image_url': str | None, 'article_text': str, 'category': str} 형태의 딕셔너리
                   또는 실패 시 None
         """
         pass
@@ -48,8 +50,8 @@ class BaseCollector(ABC):
 
             tasks = []
             for info in article_infos:
-                # fetch_article_content는 이제 original_title을 인자로 받음
-                tasks.append(self.fetch_article_content(session, info['url'], info['title']))
+                # fetch_article_content는 이제 original_title과 category를 인자로 받음
+                tasks.append(self.fetch_article_content(session, info['url'], info['title'], category_name))
 
             results = await asyncio.gather(*tasks, return_exceptions=True)
 

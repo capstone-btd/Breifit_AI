@@ -109,21 +109,21 @@ class BBCCollector(BaseCollector):
             print(f"[{self.site_name.upper()}] 총 {len(article_links)}개의 고유한 기사 링크를 찾았습니다 ({category_url}).")
         return article_links
 
-    async def fetch_article_content(self, session: aiohttp.ClientSession, article_url: str, original_title: str) -> dict | None:
+    async def fetch_article_content(self, session: aiohttp.ClientSession, article_url: str, original_title: str, category: str) -> dict | None:
         await asyncio.sleep(2) # 요청 전 2초 지연
-        print(f"[{self.site_name.upper()}] 기사 내용 가져오기 시작: {original_title} ({article_url})")
+        print(f"[{self.site_name.upper()}/{category.upper()}] 기사 내용 가져오기 시작: {original_title} ({article_url})")
         try:
             async with session.get(article_url, headers=self.headers, timeout=30) as response:
                 response.raise_for_status()
                 html_content = await response.text()
         except asyncio.TimeoutError:
-            print(f"[{self.site_name.upper()}] 기사 페이지 로딩 시간 초과: {article_url}")
+            print(f"[{self.site_name.upper()}/{category.upper()}] 기사 페이지 로딩 시간 초과: {article_url}")
             return None
         except aiohttp.ClientError as e:
-            print(f"[{self.site_name.upper()}] 기사 페이지 로딩 중 ClientError: {e}, URL: {article_url}")
+            print(f"[{self.site_name.upper()}/{category.upper()}] 기사 페이지 로딩 중 ClientError: {e}, URL: {article_url}")
             return None
         except Exception as e:
-            print(f"[{self.site_name.upper()}] HTML 가져오는 중 알 수 없는 오류 ({article_url}): {e}")
+            print(f"[{self.site_name.upper()}/{category.upper()}] HTML 가져오는 중 알 수 없는 오류 ({article_url}): {e}")
             return None
 
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -286,7 +286,7 @@ class BBCCollector(BaseCollector):
 
 
         if not body_content:
-            print(f"[{self.site_name.upper()}] 기사 본문 내용을 추출하지 못했습니다: {article_url}. HTML 구조를 확인하세요.")
+            print(f"[{self.site_name.upper()}/{category.upper()}] 기사 본문 내용을 추출하지 못했습니다: {article_url}. HTML 구조를 확인하세요.")
             return None
 
         return {
@@ -294,7 +294,8 @@ class BBCCollector(BaseCollector):
             "title": article_title,
             "main_image_url": main_image_url,
             "article_text": body_content,
-            "source": self.site_name
+            "source": self.site_name,
+            "category": category
         }
 
 if __name__ == '__main__':
@@ -322,7 +323,7 @@ if __name__ == '__main__':
             async with aiohttp.ClientSession() as session:
                 tasks = []
                 for link_info in links[:2]: # 처음 2개만 테스트
-                    tasks.append(collector.fetch_article_content(session, link_info['url'], link_info['title']))
+                    tasks.append(collector.fetch_article_content(session, link_info['url'], link_info['title'], category_name_display))
                 
                 results = await asyncio.gather(*tasks)
                 collected_articles = [res for res in results if res]
@@ -332,34 +333,9 @@ if __name__ == '__main__':
             for i, article in enumerate(collected_articles): # 처음 2개만 출력
                 print(f"  {i+1}. 제목: {article.get('title', 'N/A')}")
                 print(f"     URL: {article.get('url', 'N/A')}")
+                print(f"     카테고리: {article.get('category', 'N/A')}")
                 print(f"     이미지: {article.get('main_image_url', 'N/A')}")
-                text_snippet = article.get('article_text', '')[:200].replace('\n', ' ')
+                text_snippet = article.get('article_text', '')[:150].replace('\n', ' ')
                 print(f"     본문 일부: {text_snippet}...")
         else:
             print(f"[{collector.site_name.upper()}/{category_name_display.upper()}] 해당 카테고리에서 기사를 수집하지 못했습니다. HTML 구조 및 선택자를 확인하세요.")
-
-    async def main_test():
-        bbc_collector = BBCCollector()
-        
-        # BBC 카테고리 경로 (실제 BBC 웹사이트와 다를 수 있으므로 확인 필요)
-        # 제공된 HTML이 'Innovation' 섹션이므로, https://www.bbc.com/future 또는 https://www.bbc.com/innovation 을 테스트
-        categories_to_test_bbc = {
-            "Innovation (Future)": "future",          # https://www.bbc.com/future
-            "News": "news",                             # https://www.bbc.com/news
-            "Sport": "sport",                           # https://www.bbc.com/sport
-            "Business": "news/business",                # https://www.bbc.com/news/business
-            # "Worklife": "worklife",                   # https://www.bbc.com/worklife
-            # "Travel": "travel",                       # https://www.bbc.com/travel
-            # "Culture": "culture",                     # https://www.bbc.com/culture
-            # 테스트용 HTML이 Innovation이므로, 그와 관련된 URL을 사용
-            "Test HTML (Innovation)": "https://www.bbc.com/innovation" # 이 URL이 실제 존재하는지 확인 필요
-        }
-        
-        # 특정 URL 직접 테스트
-        # await test_bbc_category(bbc_collector, "Specific Page Test", "https://www.bbc.com/future/article/20240129-the-ai-tools-that-can-help-you-learn-a-new-language")
-
-        for display_name, path_segment in categories_to_test_bbc.items():
-            await test_bbc_category(bbc_collector, display_name, path_segment)
-
-    if __name__ == '__main__':
-        asyncio.run(main_test()) 

@@ -3,6 +3,8 @@ import aiohttp # aiohttp.ClientSession 사용을 위해 추가
 from bs4 import BeautifulSoup
 import yaml # 설정 파일 로드를 위해 추가
 import os # 파일 경로 처리를 위해 추가
+import asyncio
+import random
 
 # 프로젝트 루트 경로 설정 (BaseCollector와 유사하게)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -75,12 +77,11 @@ class YonhapCollector(BaseCollector):
             
         return article_infos
 
-    async def fetch_article_content(self, session: aiohttp.ClientSession, article_url: str, original_title: str) -> dict | None:
-        """
-        개별 뉴스 기사 URL에서 제목, 본문, 작성일, 대표 이미지 등을 추출합니다.
-        """
+    async def fetch_article_content(self, session: aiohttp.ClientSession, article_url: str, original_title: str, category: str) -> dict | None:
+        await asyncio.sleep(random.uniform(1, 3))
+        print(f"[{self.site_name.upper()}/{category.upper()}] 기사 내용 가져오기 시작: {original_title} ({article_url})")
         try:
-            async with session.get(article_url, headers=self.headers, timeout=30) as response:
+            async with session.get(article_url, headers=self.headers, timeout=self.timeout_seconds) as response:
                 response.raise_for_status()
                 html_content = await response.text()
             
@@ -108,7 +109,7 @@ class YonhapCollector(BaseCollector):
                     article_text = alt_body.get_text(separator="\n", strip=True)
 
             if not article_text.strip(): # 본문이 비었으면 original_title이라도 넣어줌 (추후 수정)
-                print(f"[{self.site_name}] 본문 내용 없음: {article_url}")
+                print(f"[{self.site_name.upper()}/{category.upper()}] 본문 내용 없음: {article_url}")
                 article_text = original_title # 임시 처리
 
             # 대표 이미지 URL 추출 (선택자 확인 필요)
@@ -132,23 +133,25 @@ class YonhapCollector(BaseCollector):
             # published_at_text = time_tag.get_text(strip=True) if time_tag else "N/A"
             # TODO: published_at_text를 표준 형식(YYYY-MM-DD HH:MM:SS)으로 변환
 
-            print(f"[{self.site_name}] Extracted content from {article_url}: Title='{article_title}'")
+            print(f"[{self.site_name.upper()}/{category.upper()}] Extracted content from {article_url}: Title='{article_title}'")
             return {
                 'url': article_url,
                 'title': article_title.strip(),
                 'main_image_url': main_image_url,
                 'article_text': article_text.strip(),
-                'source': "yonhap"
+                'source': "yonhap",
+                'category': category
             }
 
-        except aiohttp.ClientError as e:
-            print(f"[{self.site_name}] Error fetching article {article_url}: {e}")
         except asyncio.TimeoutError:
-            print(f"[{self.site_name}] Timeout fetching article {article_url}")
+            print(f"[{self.site_name.upper()}/{category.upper()}] 기사 페이지 로딩 시간 초과: {article_url}")
+            return None
+        except aiohttp.ClientError as e:
+            print(f"[{self.site_name.upper()}/{category.upper()}] 기사 페이지 로딩 중 ClientError: {e}, URL: {article_url}")
+            return None
         except Exception as e:
-            print(f"[{self.site_name}] Error parsing article {article_url}: {e}")
-
-        return None
+            print(f"[{self.site_name.upper()}/{category.upper()}] HTML 가져오는 중 알 수 없는 오류 ({article_url}): {e}")
+            return None
 
     # is_valid_news_url 메소드는 BaseCollector에 없으므로 여기서 사용하지 않거나, 
     # 필요시 BaseCollector에 추가 또는 여기서 별도 로직으로 활용.

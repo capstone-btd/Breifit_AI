@@ -35,20 +35,15 @@ def load_json(filepath: str) -> Any | None:
 
 def get_output_path(base_dir: str, site_name: str, category_name: str, filename: str) -> str:
     """일관된 형식으로 출력 파일 경로를 생성합니다."""
-    datetime_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") # 날짜와 시간까지 포함
-    # data/raw/사이트명/카테고리명/날짜_시간/파일명.json
-    # 또는 data/processed/단계명/날짜_시간/파일명.json
-    # 여기서는 수집 단계의 raw 데이터 경로를 예시로 합니다.
-    # base_dir은 "data/raw" 또는 "data/processed/grouped_articles" 등이 될 수 있습니다.
-    
-    # 파일명에 이미 날짜나 고유 식별자가 포함되어 있다면 중복 생성 방지 로직 추가 가능
-    # 예: filename이 이미 "2023-10-27_articles.json" 형태라면 datetime_str 폴더 불필요
+    # datetime_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") # 날짜와 시간까지 포함 <- 이 줄을 주석 처리 또는 삭제
 
     # category_name이 없는 경우 (예: 전체 사이트 대상 작업)
     if category_name:
-        path = os.path.join(base_dir, site_name, category_name, datetime_str) # today_date 대신 datetime_str 사용
+        # path = os.path.join(base_dir, site_name, category_name, datetime_str) # 기존 코드
+        path = os.path.join(base_dir, site_name, category_name) # 수정된 코드
     else:
-        path = os.path.join(base_dir, site_name, datetime_str) # today_date 대신 datetime_str 사용
+        # path = os.path.join(base_dir, site_name, datetime_str) # 기존 코드
+        path = os.path.join(base_dir, site_name) # 수정된 코드
         
     if not os.path.exists(path):
         os.makedirs(path)
