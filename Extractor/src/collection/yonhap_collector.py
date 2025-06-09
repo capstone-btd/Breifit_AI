@@ -112,6 +112,19 @@ class YonhapCollector(BaseCollector):
                 print(f"[{self.site_name.upper()}/{category.upper()}] 본문 내용 없음: {article_url}")
                 article_text = original_title # 임시 처리
 
+            # 연합뉴스 기사 본문 특별 처리
+            # 1. '제보는' 이후 내용 제거
+            report_index = article_text.rfind('제보는')
+            if report_index != -1:
+                article_text = article_text[:report_index]
+
+            # 2. 기자 정보 이전 내용 제거
+            reporter_index = article_text.find('기자')
+            if reporter_index != -1:
+                equals_index = article_text.find('=', reporter_index)
+                if equals_index != -1:
+                    article_text = article_text[equals_index + 1:].lstrip()
+
             # 대표 이미지 URL 추출 (선택자 확인 필요)
             main_image_url = None
             og_image_tag = soup.find('meta', property='og:image')

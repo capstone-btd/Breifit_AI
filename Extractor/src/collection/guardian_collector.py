@@ -179,20 +179,25 @@ class GuardianCollector(BaseCollector):
             article_body_container = soup.find('main', id='maincontent') # main#maincontent 내부도 확인
 
         if article_body_container:
-            # 가디언은 p 태그에 class="dcr-[random]-paragraph" 또는 그냥 p 태그 사용
-            paragraphs = article_body_container.find_all('p', class_=re.compile(r'^dcr-.*?paragraph$'))
-            if not paragraphs: # dcr- paragraph가 없으면 일반 p 탐색
-                paragraphs = article_body_container.find_all('p')
+            # 본문을 구성하는 여러 태그(p, h2, blockquote)를 모두 찾음
+            content_tags = article_body_container.find_all(['p', 'h2', 'blockquote'], recursive=True)
 
-            for p in paragraphs:
-                # 가디언은 캡션이나 광고성 문구를 <aside> 태그 또는 특정 클래스로 감싸는 경우가 있음
-                # 또는 <p><strong>관련 기사:</strong>...</p> 와 같은 패턴도 제외
-                text = p.text.strip()
-                if text and len(text) > 25 and \
-                   not p.find_parent('aside') and \
-                   not p.find_parent(class_=re.compile(r'(submeta|meta|caption|related|advert|supporting|cta|syndication|newsletter)', re.I)) and \
-                   not (p.find('strong') and re.search(r'(related|read more|subscribe|sign up)', p.find('strong').text, re.I)):
-                    article_text_parts.append(text)
+            for tag in content_tags:
+                # 클래스 이름 등을 기반으로 광고, 관련기사, 캡션 등 불필요한 부분 제외
+                parent = tag.find_parent()
+                if parent and 'aside' in parent.name:
+                    continue
+                
+                class_string = ' '.join(tag.get('class', []))
+                if re.search(r'(submeta|meta|caption|related|advert|supporting|cta|syndication|newsletter|standfirst|byline)', class_string, re.I):
+                    continue
+
+                # 텍스트 추출 및 추가
+                text = tag.text.strip()
+                if text and len(text) > 15: # 매우 짧은 텍스트는 제외
+                    # 특정 키워드가 포함된 문구 제외
+                    if not re.search(r'(related|read more|subscribe|sign up|©|copyright)', text, re.I):
+                        article_text_parts.append(text)
         else:
             print(f"[{self.site_name.upper()}] Article body container not found for {article_url}. Check selectors.")
             return None

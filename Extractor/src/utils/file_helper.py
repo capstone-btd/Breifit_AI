@@ -33,20 +33,19 @@ def load_json(filepath: str) -> Any | None:
         print(f"JSON 파일 로드 실패 ({filepath}): {e}")
         return None
 
-def get_output_path(base_dir: str, site_name: str, category_name: str, filename: str) -> str:
-    """일관된 형식으로 출력 파일 경로를 생성합니다."""
-    # datetime_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") # 날짜와 시간까지 포함 <- 이 줄을 주석 처리 또는 삭제
-
-    # category_name이 없는 경우 (예: 전체 사이트 대상 작업)
+def get_output_path(base_dir: str, site_name: str, category_name: str, filename: str, collection_time_str: str) -> str:
+    """
+    기능: 일관된 형식으로 출력 파일 경로를 생성한다.
+    input: 기본 디렉토리(base_dir), 사이트 이름(site_name), 카테고리 이름(category_name), 파일명(filename), 수집 시간 문자열(collection_time_str)
+    output: 최종 파일 경로 (str)
+    """
     if category_name:
-        # path = os.path.join(base_dir, site_name, category_name, datetime_str) # 기존 코드
-        path = os.path.join(base_dir, site_name, category_name) # 수정된 코드
+        path = os.path.join(base_dir, collection_time_str, category_name)
     else:
-        # path = os.path.join(base_dir, site_name, datetime_str) # 기존 코드
-        path = os.path.join(base_dir, site_name) # 수정된 코드
+        path = os.path.join(base_dir, collection_time_str)
         
     if not os.path.exists(path):
-        os.makedirs(path)
+        os.makedirs(path, exist_ok=True)
     return os.path.join(path, filename)
 
 

@@ -4,8 +4,9 @@ import asyncio
 
 class BaseCollector(ABC):
     """
-    모든 뉴스 수집기의 기반이 되는 추상 클래스입니다.
-    각 뉴스 사이트의 특성에 맞게 이 클래스를 상속받아 구현합니다.
+    기능: 모든 뉴스 수집기의 기반이 되는 추상 기본 클래스이다.
+    input: 없음
+    output: 없음
     """
     def __init__(self, site_name, base_url):
         self.site_name = site_name
@@ -15,26 +16,26 @@ class BaseCollector(ABC):
     @abstractmethod
     async def fetch_article_links(self, session: aiohttp.ClientSession, category_url: str) -> list[dict]:
         """
-        주어진 카테고리 URL에서 기사 제목과 URL 목록을 추출합니다.
-        반환값: [{'title': '기사 제목', 'url': '기사 URL'}, ...] 형태의 리스트
+        기능: 주어진 카테고리 URL에서 기사 제목과 URL 목록을 추출한다.
+        input: aiohttp 클라이언트 세션(session), 카테고리 URL(category_url)
+        output: {'title': str, 'url': str} 딕셔너리의 리스트 (list[dict])
         """
         pass
 
     @abstractmethod
     async def fetch_article_content(self, session: aiohttp.ClientSession, article_url: str, original_title: str, category: str) -> dict | None:
         """
-        개별 기사 URL에서 상세 내용을 추출합니다.
-        original_title은 링크 목록에서 가져온 초기 제목입니다.
-        category는 현재 수집 중인 카테고리 명입니다.
-        반환값: {'url': str, 'title': str, 'main_image_url': str | None, 'article_text': str, 'category': str} 형태의 딕셔너리
-                  또는 실패 시 None
+        기능: 개별 기사 URL에서 상세 내용을 추출한다.
+        input: aiohttp 클라이언트 세션(session), 기사 URL(article_url), 원본 제목(original_title), 카테고리(category)
+        output: 기사 상세 정보 딕셔너리 또는 실패 시 None (dict | None)
         """
         pass
 
     async def collect_by_category(self, category_name: str, category_path_segment: str) -> list[dict]:
         """
-        특정 카테고리의 모든 기사를 수집합니다.
-        category_path_segment는 base_url 뒤에 붙는 경로입니다 (예: 'world', 'business')
+        기능: 특정 카테고리의 모든 기사를 수집한다.
+        input: 카테고리 이름(category_name), 카테고리 경로 세그먼트(category_path_segment)
+        output: 수집된 기사 데이터 딕셔너리의 리스트 (list[dict])
         """
         category_url = f"{self.base_url}/{category_path_segment}"
         collected_articles = []
