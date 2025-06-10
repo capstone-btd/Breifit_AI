@@ -191,6 +191,11 @@ async def run_collection_for_site(site_name: str, site_config: dict, collection_
                 except Exception as e:
                     print(f"    번역 실패: {e}")
 
+            # 최종 기사 내용 길이 확인
+            if len(article.get('article_text', '').strip()) < 30:
+                print(f"  - 경고: 최종 기사 내용이 30자 미만이라 저장하지 않습니다. (제목: '{original_title[:30]}...')")
+                continue
+
             article_title_slug = slugify(article['title'])
             if not article_title_slug:
                 url_path_parts = [part for part in article['url'].split('/') if part]
@@ -228,11 +233,9 @@ async def main():
     # 번역기 초기화
     translation_enabled = initialize_translator()
     if translation_enabled:
-        print("✅ 번역 기능이 활성화되었습니다.")3
-
-
+        print("[OK] 번역 기능이 활성화되었습니다.")
     else:
-        print("ℹ️  번역 기능이 비활성화되어 있습니다.")
+        print("[INFO] 번역 기능이 비활성화되어 있습니다.")
     
     config = load_config(CONFIG_FILE_PATH)
     sites_to_crawl = config.get('sites')
@@ -256,7 +259,7 @@ async def main():
     print("\n모든 사이트 수집 작업이 완료되었습니다.")
     
     if translation_enabled:
-        print("📊 번역 통계:")
+        print("--- 번역 통계 ---")
         print(f"   - 번역기 모델: {translator.model_name}")
         print(f"   - 디바이스: {translator.device}")
         print("   - 영어 기사는 한국어로 번역되어 article_text에 저장되었습니다.")

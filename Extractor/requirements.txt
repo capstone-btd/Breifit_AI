@@ -1,17 +1,170 @@
 aiofiles==24.1.0
+aiohappyeyeballs==2.6.1
 aiohttp==3.11.18
+aiosignal==1.3.2
+aiosqlite==0.21.0
+annotated-types @ file:///C:/b/abs_0dmaoyhhj3/croot/annotated-types_1709542968311/work
+anyio==4.9.0
+asttokens==3.0.0
+async-timeout==5.0.1
+attrs==25.3.0
+backcall==0.2.0
 beautifulsoup4==4.13.4
-crawl4ai==0.6.3
-Requests==2.32.3
+bleach==6.2.0
+blis @ file:///C:/b/abs_6awydo_s4n/croot/cython-blis_1728909080692/work
+Brotli @ file:///C:/b/abs_c415aux9ra/croot/brotli-split_1736182803933/work
+catalogue @ file:///C:/b/abs_0d918n68qi/croot/catalogue_1703688198988/work
+certifi @ file:///C:/b/abs_3beajm7umk/croot/certifi_1745939228545/work/certifi
+cffi==1.17.1
+chardet==5.2.0
+charset-normalizer @ file:///croot/charset-normalizer_1721748349566/work
+click @ file:///C:/b/abs_42rbjngfys/croot/click_1744271606983/work
+cloudpathlib @ file:///C:/b/abs_049y1lewoy/croot/cloudpathlib_1704812313028/work
+colorama @ file:///C:/b/abs_a9ozq0l032/croot/colorama_1672387194846/work
+confection @ file:///C:/b/abs_dcftb4qo2h/croot/confection_1703694738925/work
+Crawl4AI==0.6.3
+cryptography==44.0.3
+cssselect==1.3.0
+cymem @ file:///C:/b/abs_908b_1v3z0/croot/cymem_1736262800502/work
+decorator==5.2.1
+defusedxml==0.7.1
+distro==1.9.0
+dnspython==2.7.0
+docopt==0.6.2
+email_validator==2.2.0
+en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl#sha256=1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85
+exceptiongroup==1.3.0
+executing==2.2.0
+fake-http-header==0.3.5
+fake-useragent==2.2.0
+fastapi==0.111.0
+fastapi-cli==0.0.7
+fastjsonschema==2.21.1
+feedparser==6.0.11
+filelock @ file:///C:/b/abs_758187j281/croot/filelock_1744281404850/work
+frozenlist==1.6.0
+fsspec==2025.3.2
+gmpy2 @ file:///C:/b/abs_d8ki0o0h97/croot/gmpy2_1738085498525/work
+greenlet==3.2.2
+h11==0.16.0
+httpcore==1.0.9
+httptools==0.6.4
+httpx==0.28.1
+huggingface-hub==0.31.2
+humanize==4.12.3
+idna==3.10
+importlib_metadata==8.7.0
+ipython==8.12.3
+jedi==0.19.2
+Jinja2 @ file:///C:/b/abs_920kup4e6u/croot/jinja2_1741711580669/work
+jiter==0.9.0
+joblib==1.5.0
+jsonschema==4.23.0
+jsonschema-specifications==2025.4.1
+jupyter_client==8.6.3
+jupyter_core==5.7.2
+jupyterlab_pygments==0.3.0
+ko_core_news_sm @ https://github.com/explosion/spacy-models/releases/download/ko_core_news_sm-3.8.0/ko_core_news_sm-3.8.0-py3-none-any.whl#sha256=15486b93a22ec8ee43f787390afdb4e2086851573eb12b69dd2c4f2a95b3e0a4
+langcodes @ file:///opt/conda/conda-bld/langcodes_1643477751144/work
+langdetect==1.0.9
+litellm==1.70.0
+lxml==5.4.0
+markdown-it-py @ file:///C:/b/abs_a5bfngz6fu/croot/markdown-it-py_1684279915556/work
+MarkupSafe @ file:///C:/b/abs_a0ma7ge0jc/croot/markupsafe_1738584052792/work
+matplotlib-inline==0.1.7
+mdurl @ file:///C:/Windows/TEMP/abs_3197pzpjbi/croots/recipe/mdurl_1659716032440/work
+mistune==3.1.3
+mkl-service==2.4.0
+mkl_fft @ file:///C:/Users/dev-admin/mkl/mkl_fft_1730823082242/work
+mkl_random @ file:///C:/Users/dev-admin/mkl/mkl_random_1730822522280/work
+mpmath @ file:///C:/b/abs_7833jrbiox/croot/mpmath_1690848321154/work
+multidict==6.4.3
+murmurhash @ file:///C:/b/abs_f1_1p5yg6_/croot/murmurhash_1741707831116/work
+nbclient==0.10.2
+nbconvert==7.16.6
+nbformat==5.10.4
+networkx @ file:///C:/b/abs_b054htfn9t/croot/networkx_1737043671910/work
+nltk==3.9.1
+numpy @ file:///C:/b/abs_0123vcxhf8/croot/numpy_and_numpy_base_1725470331966/work/dist/numpy-2.0.1-cp310-cp310-win_amd64.whl#sha256=e824ec3b279f4c5207736c83ac2f2dc79b489e08501a4ea9e3fc178c45db289b
+openai==1.75.0
+orjson==3.10.18
+packaging @ file:///C:/b/abs_3by6s2fa66/croot/packaging_1734472138782/work
+pandocfilters==1.5.1
+parso==0.8.4
+pickleshare==0.7.5
+pillow==10.4.0
+pipreqs==0.5.0
+platformdirs==4.3.8
+playwright==1.52.0
+preshed @ file:///C:/b/abs_dbt07m3xto/croot/preshed_1745242591660/work
+prompt_toolkit==3.0.51
+propcache==0.3.1
+protobuf==6.31.1
+psutil==7.0.0
+pure_eval==0.2.3
+pycparser==2.22
+pydantic @ file:///C:/b/abs_27dx58x550/croot/pydantic_1734736090499/work
+pydantic_core @ file:///C:/b/abs_bdosz7qwys/croot/pydantic-core_1734726071532/work
+pyee==13.0.0
+Pygments @ file:///C:/b/abs_e4bg5vh5j_/croot/pygments_1744667628203/work
+pyOpenSSL==25.0.0
+pyperclip==1.9.0
+PySocks @ file:///C:/ci_310/pysocks_1642089375450/work
+python-dateutil==2.9.0.post0
+python-dotenv==1.1.0
+python-multipart==0.0.20
+pywin32==310
 PyYAML==6.0.1
-fastapi
-uvicorn[standard]
-feedparser
-langdetect
-transformers
-sentencepiece
-
-# 이거 cuda 11.8 버전용으로 한거임
-torch==2.3.0 --index-url https://download.pytorch.org/whl/cu118
-torchvision==0.18.0 --index-url https://download.pytorch.org/whl/cu118
-torchaudio==2.3.0 --index-url https://download.pytorch.org/whl/cu118
+pyzmq==26.4.0
+rank-bm25==0.2.2
+referencing==0.36.2
+regex==2024.11.6
+requests @ file:///C:/b/abs_c3508vg8ez/croot/requests_1731000584867/work
+rich @ file:///C:/b/abs_8b92fzmygg/croot/rich_1732638991774/work
+rich-toolkit==0.14.6
+rpds-py==0.25.0
+safetensors==0.5.3
+sentencepiece==0.2.0
+sgmllib3k==1.0.0
+shellingham @ file:///C:/b/abs_c3l_fe1lnk/croot/shellingham_1669142179061/work
+six==1.17.0
+smart-open @ file:///C:/ci/smart_open_1651235038100/work
+sniffio==1.3.1
+snowballstemmer==2.2.0
+soupsieve==2.7
+spacy @ file:///C:/b/abs_4eqj6u2dl4/croot/spacy_1729067668563/work
+spacy-legacy @ file:///C:/b/abs_03fuap2pri/croot/spacy-legacy_1684141127990/work
+spacy-loggers @ file:///C:/b/abs_d6x_m5j2nj/croot/spacy-loggers_1684139141178/work
+srsly @ file:///C:/b/abs_610qoxca56/croot/srsly_1741858013545/work
+stack-data==0.6.3
+starlette==0.37.2
+sympy==1.13.1
+tf-playwright-stealth==1.1.2
+thinc @ file:///C:/b/abs_3eoxuqpuxn/croot/thinc_1742231860675/work
+tiktoken==0.9.0
+tinycss2==1.4.0
+tokenizers==0.15.2
+torch==2.6.0+cu118
+torchaudio==2.6.0+cu118
+torchvision==0.21.0+cu118
+tornado==6.5.1
+tqdm @ file:///C:/b/abs_0eh9b6xugj/croot/tqdm_1738945553987/work
+traitlets==5.14.3
+transformers==4.37.2
+typer==0.16.0
+typing-inspection==0.4.0
+typing_extensions @ file:///C:/b/abs_0ffjxtihug/croot/typing_extensions_1734714875646/work
+ujson==5.10.0
+urllib3 @ file:///C:/b/abs_7bst06lizn/croot/urllib3_1737133657081/work
+uvicorn==0.29.0
+wasabi @ file:///C:/ci/wasabi_1651216439282/work
+watchfiles==1.0.5
+wcwidth==0.2.13
+weasel @ file:///C:/b/abs_a2eodvola9/croot/weasel_1704815815095/work
+webencodings==0.5.1
+websockets==15.0.1
+win-inet-pton @ file:///C:/ci_310/win_inet_pton_1642658466512/work
+xxhash==3.5.0
+yarg==0.1.9
+yarl==1.20.0
+zipp==3.21.0

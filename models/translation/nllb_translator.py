@@ -102,11 +102,14 @@ class NLLBTranslator:
 
         translated_chunks = []
         try:
+            print(f"총 {len(chunks)}개의 텍스트 조각으로 나누어 번역을 시작합니다.")
             self.tokenizer.src_lang = self.src_lang
             
             for i, chunk in enumerate(chunks):
                 if not chunk.strip():
                     continue
+                
+                print(f"  - 조각 {i+1}/{len(chunks)} 번역 중... (길이: {len(chunk)}자)")
 
                 # 텍스트 토큰화
                 inputs = self.tokenizer(
@@ -121,7 +124,7 @@ class NLLBTranslator:
                     generated_tokens = self.model.generate(
                         **inputs,
                         forced_bos_token_id=self.tokenizer.lang_code_to_id[self.tgt_lang],
-                        max_new_tokens=int(len(chunk) * 1.5), # 번역 결과가 원문보다 길어질 경우를 대비
+                        max_new_tokens=512, # 안정적인 고정 값으로 변경
                         num_beams=num_beams,
                         early_stopping=True,
                         do_sample=False,
@@ -130,12 +133,12 @@ class NLLBTranslator:
                 # 결과 디코딩
                 translated_chunk = self.tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)[0]
                 translated_chunks.append(translated_chunk.strip())
-                logging.info(f"청크 {i+1}/{len(chunks)} 번역 완료.")
             
+            print(f"모든 조각({len(chunks)}개)의 번역을 완료하고 텍스트를 병합합니다.")
             return " ".join(translated_chunks)
             
         except Exception as e:
-            logging.error(f"번역 실패 - 입력: '{english_text[:50]}...', 오류: {e}")
+            print(f"번역 실패 - 입력: '{english_text[:50]}...', 오류: {e}")
             return f"[Translation Error: {str(e)}]"
     
     def batch_translate(self, english_texts, batch_size=4):

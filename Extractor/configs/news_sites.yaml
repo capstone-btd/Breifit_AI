@@ -3,107 +3,107 @@ sites:
     base_url: "https://edition.cnn.com"
     categories:
       세계: "world"
-      경제: "business"
-      #markets: "markets"
-      #health: "health"
-      #entertainment: "entertainment"
-      IT: ["tech","science"]
-      #style: "style"
-      #travel: "travel"
-      스포츠: "sports"
-      #climate: "climate"
+      # 경제: "business"
+      # #markets: "markets"
+      # #health: "health"
+      # #entertainment: "entertainment"
+      # IT: ["tech","science"]
+      # #style: "style"
+      # #travel: "travel"
+      # 스포츠: "sports"
+      # #climate: "climate"
       #weather: "weather"
 
-  bbc:
-    base_url: "https://www.bbc.com"
-    categories:
-      세계: "news"  
-      스포츠: "sport" 
-      경제: "business"
-      IT: ["innovation/technology","innovation/artificial-intelligence"]
-      문화: "culture"   
-      # arts: "culture/arts"  
-      # travel: "travel" 
-      #earth: "future-planet"
+  # bbc:
+  #   base_url: "https://www.bbc.com"
+  #   categories:
+  #     세계: "news"  
+  #     스포츠: "sport" 
+  #     경제: "business"
+  #     IT: ["innovation/technology","innovation/artificial-intelligence"]
+  #     문화: "culture"   
+  #     # arts: "culture/arts"  
+  #     # travel: "travel" 
+  #     #earth: "future-planet"
 
-  the_guardian:
-    base_url: "https://www.theguardian.com"
-    categories:
-      세계: "world"
-      # lifeandstyle: "uk/lifeandstyle"
-      문화: "uk/culture"
-      스포츠: ["uk/sport","football"]
-      # football: "football"
-      IT: ["uk/technology","science"]
-      경제: "uk/business"
-  # Reuter, NPR, NYT는 안돼서 없애놨음
-  the_times:
-    base_url: "https://www.thetimes.co.uk"
-    categories:
-      세계: "world"
-      #life-style: "life-style" 
-      경제: "business-money" 
-      스포츠: "sport"
-      문화: "culture"
-  #완료
-  yonhap:
-    base_url: "https://www.yna.co.kr"
-    categories:
-      정치: "politics/all"
-      경제: "economy/all" 
-      사회: ["society/all","local/all"]
-      세계: "international/all" 
-      문화: "culture/all" 
-      스포츠: "sports/all" 
-      IT: "industry/technology-science" 
+  # the_guardian:
+  #   base_url: "https://www.theguardian.com"
+  #   categories:
+  #     세계: "world"
+  #     # lifeandstyle: "uk/lifeandstyle"
+  #     문화: "uk/culture"
+  #     스포츠: ["uk/sport","football"]
+  #     # football: "football"
+  #     IT: ["uk/technology","science"]
+  #     경제: "uk/business"
+  # # Reuter, NPR, NYT는 안돼서 없애놨음
+  # the_times:
+  #   base_url: "https://www.thetimes.co.uk"
+  #   categories:
+  #     세계: "world"
+  #     #life-style: "life-style" 
+  #     경제: "business-money" 
+  #     스포츠: "sport"
+  #     문화: "culture"
+  # #완료
+  # yonhap:
+  #   base_url: "https://www.yna.co.kr"
+  #   categories:
+  #     정치: "politics/all"
+  #     경제: "economy/all" 
+  #     사회: ["society/all","local/all"]
+  #     세계: "international/all" 
+  #     문화: "culture/all" 
+  #     스포츠: "sports/all" 
+  #     IT: "industry/technology-science" 
 
-  chosun:
-    base_url: "https://www.chosun.com"
-    categories:
-      정치: "politics" 
-      경제: "economy"
-      사회: "national" 
-      세계: "international" 
-      문화: "culture-style" 
-      스포츠: "sports" 
+  # chosun:
+  #   base_url: "https://www.chosun.com"
+  #   categories:
+  #     정치: "politics" 
+  #     경제: "economy"
+  #     사회: "national" 
+  #     세계: "international" 
+  #     문화: "culture-style" 
+  #     스포츠: "sports" 
 
-  joongang:
-    base_url: "https://www.joongang.co.kr"
-    categories:
-      정치: "politics" 
-      경제: "money" 
-      사회: "society" 
-      세계: "world" 
-      문화: "culture" 
-      스포츠: "sports" 
+  # joongang:
+  #   base_url: "https://www.joongang.co.kr"
+  #   categories:
+  #     정치: "politics" 
+  #     경제: "money" 
+  #     사회: "society" 
+  #     세계: "world" 
+  #     문화: "culture" 
+  #     스포츠: "sports" 
 
-  donga:
-    base_url: "https://www.donga.com"
-    categories:
-      정치: "news/Politics" # 경로 대소문자 수정
-      경제: "news/Economy" 
-      사회: "news/Society" 
-      세계: "news/Inter" 
-      문화: "news/Culture" 
-      스포츠: "news/Sports" 
+  # donga:
+  #   base_url: "https://www.donga.com"
+  #   categories:
+  #     정치: "news/Politics" # 경로 대소문자 수정
+  #     경제: "news/Economy" 
+  #     사회: "news/Society" 
+  #     세계: "news/Inter" 
+  #     문화: "news/Culture" 
+  #     스포츠: "news/Sports" 
 
-  hankyoreh:
-    base_url: "https://www.hani.co.kr"
-    categories:
-      정치: "arti/politics" 
-      경제: "arti/economy" 
-      사회: ["arti/society","arti/area"] 
-      세계: "arti/international" 
-      문화: "arti/culture" 
-      스포츠: "arti/sports" 
+  # hankyoreh:
+  #   base_url: "https://www.hani.co.kr"
+  #   categories:
+  #     정치: "arti/politics" 
+  #     경제: "arti/economy" 
+  #     사회: ["arti/society","arti/area"] 
+  #     세계: "arti/international" 
+  #     문화: "arti/culture" 
+  #     스포츠: "arti/sports" 
 
-  kyunghyang:
-    base_url: "https://www.khan.co.kr"
-    categories:
-      정치: "politics" 
-      경제: "economy" 
-      사회: "national" 
-      세계: "world" 
-      문화: "culture" 
-      스포츠: "sports"
+  # kyunghyang:
+  #   base_url: "https://www.khan.co.kr"
+  #   categories:
+  #     정치: "politics" 
+  #     경제: "economy" 
+  #     사회: "national" 
+  #     세계: "world" 
+  #     문화: "culture" 
+  #     스포츠: "sports"
   
