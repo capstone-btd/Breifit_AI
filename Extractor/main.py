@@ -31,12 +31,12 @@ async def run_script():
 
     if stdout:
         print("--- 스크립트 출력(STDOUT) ---")
-        print(stdout.decode('cp949', errors='ignore'))
+        print(stdout.decode('utf-8', errors='ignore'))
         print("--------------------------")
 
     if stderr:
         print("--- 스크립트 오류(STDERR) ---")
-        print(stderr.decode('cp949', errors='ignore'))
+        print(stderr.decode('utf-8', errors='ignore'))
         print("--------------------------")
 
 
