@@ -62,18 +62,33 @@ def preprocess_text_simple(text: str) -> str:
     """
     if not text or not isinstance(text, str):
         return ""
-    text = re.sub(r'\s+', ' ', text).strip()
+    
+    # 1. 이스케이프된 개행/탭 문자(예: '\\n')와 실제 공백/줄바꿈을 모두 단일 공백으로 치환합니다.
+    text = re.sub(r'\\n|\\t|\\r|\s+', ' ', text).strip()
+    
+    # 2. 괄호와 그 안의 내용(주석, 출처 등)을 제거합니다.
     text = re.sub(r'\[.*?\]', '', text)
     text = re.sub(r'\(.*?\)', '', text)
-    text = re.sub(r'\S+@\S+', '', text)
-    text = re.sub(r'https?://\S+', '', text)
-    text = re.sub(r'[\\/]', '', text)
-    text = re.sub(r'[^A-Za-z0-9가-힣\s.,\'"%·-]', '', text) 
+    
+    # 3. 이메일과 URL을 제거합니다.
+    text = re.sub(r'[\w\.-]+@[\w\.-]+', '', text) # 이메일
+    text = re.sub(r'https?://\S+', '', text) # URL
+    
+    # 4. 저작권 관련 문구를 제거합니다.
     copyright_pattern = r'(저작권자|copyright|ⓒ|©)\s?\(?c\)?\s?\w*|무단\s?(전재|배포|재배포)\s?금지|AI\s?학습\s?및\s?활용\s?금지|All\s?rights\s?reserved'
     text = re.sub(copyright_pattern, '', text, flags=re.IGNORECASE)
-    text = re.sub(r'[\w\.-]+@[\w\.-]+', '', text)
+    
+    # 5. 특정 형식의 날짜/시간 '송고' 문구를 제거합니다.
     text = re.sub(r'\d{4}[/\.]\d{2}[/\.]\d{2}\s\d{2}:\d{2}\s송고', '', text)
-    return text.strip()
+    
+    # 6. 허용된 문자(한/영/숫자 및 기본 구두점) 외 모든 문자를 제거합니다.
+    # 슬래시, 백슬래시 등도 이 단계에서 함께 처리됩니다.
+    text = re.sub(r"[^A-Za-z0-9가-힣\s\.,\'\"%·-]", '', text)
+    
+    # 7. 위의 여러 치환 과정에서 발생할 수 있는 여분의 공백을 마지막으로 한 번 더 정리합니다.
+    text = re.sub(r'\s+', ' ', text).strip()
+    
+    return text
 
 def load_config(config_path: str) -> dict:
     """

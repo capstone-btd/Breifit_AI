@@ -1,4 +1,7 @@
-FROM python:3.10-slim
+FROM pytorch/pytorch:2.1.0-cuda11.8-cudnn8-runtime
+
+# 질문 없이 설치를 진행하기 위한 환경 변수 설정
+ENV DEBIAN_FRONTEND=noninteractive
 
 # 작업 디렉토리 설정
 WORKDIR /app
@@ -12,6 +15,9 @@ RUN apt-get update && \
 COPY ./requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
+
+# Playwright가 사용할 브라우저 및 관련 종속성을 설치합니다.
+RUN playwright install --with-deps
 
 # 프로젝트 전체 파일 복사
 # .dockerignore에 명시된 파일들은 제외됨
