@@ -3,6 +3,7 @@ import aiohttp
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import re
+import random
 
 from .base_collector import BaseCollector
 from ..utils.file_helper import slugify
@@ -111,33 +112,34 @@ class CnnCollector(BaseCollector):
         print(f"[{self.site_name.upper()}] 총 {len(articles)}개의 고유한 기사 링크를 찾았습니다 ({category_url}).")
         return articles
 
-    async def fetch_article_content(self, session: aiohttp.ClientSession, article_url: str, original_title: str) -> dict | None:
-        print(f"[{self.site_name.upper()}] 기사 내용 가져오기 시작: {original_title} ({article_url})")
+    async def fetch_article_content(self, session: aiohttp.ClientSession, article_url: str, original_title: str, category: str) -> dict | None:
+        await asyncio.sleep(random.uniform(1, 3))
+        print(f"[{self.site_name.upper()}/{category.upper()}] 기사 내용 가져오기 시작: {original_title} ({article_url})")
         try:
-            async with session.get(article_url, headers=self.headers, timeout=30) as response:
+            async with session.get(article_url, headers=self.headers, timeout=self.timeout_seconds) as response:
                 if response.status != 200:
-                    print(f"[{self.site_name.upper()}] 기사 페이지 로딩 오류: {response.status}, URL: {article_url}")
+                    print(f"[{self.site_name.upper()}/{category.upper()}] 기사 페이지 로딩 오류: {response.status}, URL: {article_url}")
                     return None
                 html_content = await response.text()
         except asyncio.TimeoutError:
-            print(f"[{self.site_name.upper()}] 기사 페이지 로딩 시간 초과: {article_url}")
+            print(f"[{self.site_name.upper()}/{category.upper()}] 기사 페이지 로딩 시간 초과: {article_url}")
             return None
         except aiohttp.ClientError as e:
-            print(f"[{self.site_name.upper()}] 기사 페이지 로딩 중 ClientError 발생: {e}, URL: {article_url}")
+            print(f"[{self.site_name.upper()}/{category.upper()}] 기사 페이지 로딩 중 ClientError: {e}, URL: {article_url}")
             return None
         except Exception as e:
-            print(f"[{self.site_name.upper()}] HTML 가져오는 중 알 수 없는 오류 ({article_url}): {e}")
+            print(f"[{self.site_name.upper()}/{category.upper()}] HTML 가져오는 중 알 수 없는 오류 ({article_url}): {e}")
             return None
 
         try:
             # CNN용 상세 추출 함수 사용
             extracted_title, image_url, article_text = extract_article_details_cnn(html_content, original_title)
         except Exception as e:
-            print(f"[{self.site_name.upper()}] HTML 파싱 또는 내용 추출 중 오류 ({article_url}): {e}")
+            print(f"[{self.site_name.upper()}/{category.upper()}] HTML 파싱 또는 내용 추출 중 오류 ({article_url}): {e}")
             return None
 
         if not article_text: # 본문 내용이 없으면 유효하지 않은 기사로 판단
-            print(f"[{self.site_name.upper()}] 기사 본문 내용을 추출하지 못했습니다: {article_url}")
+            print(f"[{self.site_name.upper()}/{category.upper()}] 기사 본문 내용을 추출하지 못했습니다: {article_url}")
             return None
 
         return {
@@ -145,7 +147,8 @@ class CnnCollector(BaseCollector):
             "title": extracted_title,
             "main_image_url": image_url,
             "article_text": article_text,
-            "source": self.site_name # 출처 추가
+            "source": self.site_name,
+            "category": category
         }
 
 # 기존 cnn.py의 main() 함수와 파일 저장 로직은

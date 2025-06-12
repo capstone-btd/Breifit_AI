@@ -16,7 +16,11 @@ RAW_DATA_DIR = os.path.join(PROJECT_ROOT, 'data', 'raw')
 GROUPED_DATA_DIR = os.path.join(PROJECT_ROOT, 'data', 'processed', 'grouped_articles')
 
 def load_all_raw_articles(raw_data_dir: str) -> List[Dict[str, Any]]:
-    """raw_data_dir에서 모든 수집된 기사들을 로드합니다."""
+    """
+    기능: raw_data_dir에서 모든 수집된 기사들을 로드한다.
+    input: 원본 데이터 디렉토리 경로 (str)
+    output: 모든 기사 데이터가 담긴 리스트 (List[Dict[str, Any]])
+    """
     all_articles = []
     print(f"원본 기사 로드 시작: {raw_data_dir}")
     if not os.path.exists(raw_data_dir):
@@ -48,6 +52,11 @@ def load_all_raw_articles(raw_data_dir: str) -> List[Dict[str, Any]]:
     return all_articles
 
 async def main():
+    """
+    기능: 수집된 모든 기사를 로드하여 유사한 주제끼리 그룹화하고, 그 결과를 파일로 저장한다.
+    input: 없음
+    output: 없음
+    """
     print("===== 기사 그룹핑 프로세스 시작 =====")
 
     # 1. 모든 원본 기사 로드

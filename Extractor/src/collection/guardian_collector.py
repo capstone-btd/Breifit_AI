@@ -3,6 +3,7 @@ import aiohttp
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import re
+import random
 
 from .base_collector import BaseCollector
 
@@ -111,21 +112,21 @@ class GuardianCollector(BaseCollector):
             print(f"[{self.site_name.upper()}] Found {len(article_links)} unique article links on {category_url}.")
         return article_links
 
-    async def fetch_article_content(self, session: aiohttp.ClientSession, article_url: str, original_title: str) -> dict | None:
-        await asyncio.sleep(1)
-        print(f"[{self.site_name.upper()}] Fetching content for: {original_title} ({article_url})")
+    async def fetch_article_content(self, session: aiohttp.ClientSession, article_url: str, original_title: str, category: str) -> dict | None:
+        await asyncio.sleep(random.uniform(1, 3))
+        print(f"[{self.site_name.upper()}/{category.upper()}] 기사 내용 가져오기 시작: {original_title} ({article_url})")
         try:
             async with session.get(article_url, headers=self.headers, timeout=30) as response:
                 response.raise_for_status()
                 html_content = await response.text()
         except asyncio.TimeoutError:
-            print(f"[{self.site_name.upper()}] Timeout error fetching article: {article_url}")
+            print(f"[{self.site_name.upper()}/{category.upper()}] 기사 페이지 로딩 시간 초과: {article_url}")
             return None
         except aiohttp.ClientError as e:
-            print(f"[{self.site_name.upper()}] ClientError fetching article: {e}, URL: {article_url}")
+            print(f"[{self.site_name.upper()}/{category.upper()}] 기사 페이지 로딩 중 ClientError: {e}, URL: {article_url}")
             return None
         except Exception as e:
-            print(f"[{self.site_name.upper()}] Unknown error fetching article HTML ({article_url}): {e}")
+            print(f"[{self.site_name.upper()}/{category.upper()}] HTML 가져오는 중 알 수 없는 오류 ({article_url}): {e}")
             return None
 
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -178,20 +179,25 @@ class GuardianCollector(BaseCollector):
             article_body_container = soup.find('main', id='maincontent') # main#maincontent 내부도 확인
 
         if article_body_container:
-            # 가디언은 p 태그에 class="dcr-[random]-paragraph" 또는 그냥 p 태그 사용
-            paragraphs = article_body_container.find_all('p', class_=re.compile(r'^dcr-.*?paragraph$'))
-            if not paragraphs: # dcr- paragraph가 없으면 일반 p 탐색
-                paragraphs = article_body_container.find_all('p')
+            # 본문을 구성하는 여러 태그(p, h2, blockquote)를 모두 찾음
+            content_tags = article_body_container.find_all(['p', 'h2', 'blockquote'], recursive=True)
 
-            for p in paragraphs:
-                # 가디언은 캡션이나 광고성 문구를 <aside> 태그 또는 특정 클래스로 감싸는 경우가 있음
-                # 또는 <p><strong>관련 기사:</strong>...</p> 와 같은 패턴도 제외
-                text = p.text.strip()
-                if text and len(text) > 25 and \
-                   not p.find_parent('aside') and \
-                   not p.find_parent(class_=re.compile(r'(submeta|meta|caption|related|advert|supporting|cta|syndication|newsletter)', re.I)) and \
-                   not (p.find('strong') and re.search(r'(related|read more|subscribe|sign up)', p.find('strong').text, re.I)):
-                    article_text_parts.append(text)
+            for tag in content_tags:
+                # 클래스 이름 등을 기반으로 광고, 관련기사, 캡션 등 불필요한 부분 제외
+                parent = tag.find_parent()
+                if parent and 'aside' in parent.name:
+                    continue
+                
+                class_string = ' '.join(tag.get('class', []))
+                if re.search(r'(submeta|meta|caption|related|advert|supporting|cta|syndication|newsletter|standfirst|byline)', class_string, re.I):
+                    continue
+
+                # 텍스트 추출 및 추가
+                text = tag.text.strip()
+                if text and len(text) > 15: # 매우 짧은 텍스트는 제외
+                    # 특정 키워드가 포함된 문구 제외
+                    if not re.search(r'(related|read more|subscribe|sign up|©|copyright)', text, re.I):
+                        article_text_parts.append(text)
         else:
             print(f"[{self.site_name.upper()}] Article body container not found for {article_url}. Check selectors.")
             return None
@@ -208,7 +214,8 @@ class GuardianCollector(BaseCollector):
             'title': str(article_title).strip() if article_title else original_title.strip(),
             'main_image_url': str(main_image_url).strip() if main_image_url else None,
             'article_text': full_article_text.strip(),
-            'source': "the guardian"
+            'source': "the guardian",
+            'category': category
         }
 
 # 테스트용 코드

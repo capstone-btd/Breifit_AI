@@ -4,6 +4,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 import re
 import json # JSON 파싱을 위해 추가
+import random
 
 from .base_collector import BaseCollector
 
@@ -174,15 +175,21 @@ class TheTimesCollector(BaseCollector):
                 #     if caption: parts.append(f"[Image Caption: {caption.strip()}]")
         return parts
 
-    async def fetch_article_content(self, session: aiohttp.ClientSession, article_url: str, original_title: str) -> dict | None:
-        await asyncio.sleep(1)
-        print(f"[{self.site_name.upper()}] Fetching content for: {original_title} ({article_url})")
+    async def fetch_article_content(self, session: aiohttp.ClientSession, article_url: str, original_title: str, category: str) -> dict | None:
+        await asyncio.sleep(random.uniform(1, 3))
+        print(f"[{self.site_name.upper()}/{category.upper()}] 기사 내용 가져오기 시작: {original_title} ({article_url})")
         try:
             async with session.get(article_url, headers=self.headers, timeout=30) as response:
                 response.raise_for_status()
                 html_content = await response.text()
+        except asyncio.TimeoutError:
+            print(f"[{self.site_name.upper()}/{category.upper()}] 기사 페이지 로딩 시간 초과: {article_url}")
+            return None
+        except aiohttp.ClientError as e:
+            print(f"[{self.site_name.upper()}/{category.upper()}] 기사 페이지 로딩 중 ClientError: {e}, URL: {article_url}")
+            return None
         except Exception as e:
-            print(f"[{self.site_name.upper()}] Error fetching article HTML ({article_url}): {e}")
+            print(f"[{self.site_name.upper()}/{category.upper()}] HTML 가져오는 중 알 수 없는 오류 ({article_url}): {e}")
             return None
 
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -293,7 +300,7 @@ class TheTimesCollector(BaseCollector):
 
         # JSON 파싱 실패 또는 데이터 부족 시, 기존 BeautifulSoup 기반 로직 (fallback)
         if not article_text_parts: # 본문을 JSON에서 전혀 못가져온 경우
-            print(f"[{self.site_name.upper()}] Failed to get text from APOLLO_STATE for {article_url}. Falling back to HTML parsing.")
+            print(f"[{self.site_name.upper()}/{category.upper()}] Failed to get text from APOLLO_STATE for {article_url}. Falling back to HTML parsing.")
             
             # 제목 (JSON에서 못가져왔거나, 원래 제목 그대로라면 다시 시도)
             if article_title == original_title or not article_title:
@@ -349,7 +356,7 @@ class TheTimesCollector(BaseCollector):
 
 
         if not article_text_parts:
-            print(f"[{self.site_name.upper()}] No text found in article: {article_url} after all attempts.")
+            print(f"[{self.site_name.upper()}/{category.upper()}] No text found in article: {article_url} after all attempts.")
             # return None # 본문 없으면 None 반환할 수도 있으나, 제목/이미지만이라도 수집하려면 아래 유지
 
         full_article_text = '\n\n'.join(article_text_parts).strip()
@@ -359,7 +366,8 @@ class TheTimesCollector(BaseCollector):
             'title': str(article_title).strip() if article_title else original_title.strip(),
             'main_image_url': str(main_image_url).strip() if main_image_url else None,
             'article_text': full_article_text,
-            'source': "the times"
+            'source': "the times",
+            'category': category
         }
 
 # 테스트용 코드 (선택자 구현 후 주석 해제)

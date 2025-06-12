@@ -5,6 +5,7 @@ import yaml
 import os
 import asyncio
 import re
+import random
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DEFAULT_CONFIG_PATH = os.path.join(PROJECT_ROOT, 'configs', 'news_sites.yaml')
@@ -74,10 +75,11 @@ class KyunghyangCollector(BaseCollector):
             print(f"[{self.site_name}] Error fetching or parsing links from {category_url}: {e}")
         return article_infos
 
-    async def fetch_article_content(self, session: aiohttp.ClientSession, article_url: str, original_title: str) -> dict | None:
-        print(f"[{self.site_name}] Fetching content from {article_url}")
+    async def fetch_article_content(self, session: aiohttp.ClientSession, article_url: str, original_title: str, category: str) -> dict | None:
+        await asyncio.sleep(random.uniform(1, 3))
+        print(f"[{self.site_name.upper()}/{category.upper()}] 기사 내용 가져오기 시작: {original_title} ({article_url})")
         try:
-            async with session.get(article_url, headers=self.headers, timeout=30) as response:
+            async with session.get(article_url, headers=self.headers, timeout=self.timeout_seconds) as response:
                 response.raise_for_status()
                 html_content = await response.text()
             soup = BeautifulSoup(html_content, 'html.parser')
@@ -104,13 +106,28 @@ class KyunghyangCollector(BaseCollector):
                 main_image_url = og_image_tag['content']
             # TODO: og:image 없을 경우 대체 로직
 
+            article_text_content = article_text.strip()
+            if not article_text_content:
+                print(f"[{self.site_name.upper()}/{category.upper()}] 기사 본문 내용을 추출하지 못했습니다: {article_url}")
+                return None
+
             return {
-                'url': article_url,
-                'title': article_title.strip(),
-                'main_image_url': main_image_url,
-                'article_text': article_text.strip(),
-                'source': "kyunghyang"
+                "url": article_url,
+                "title": article_title,
+                "main_image_url": main_image_url,
+                "article_text": article_text_content,
+                "source": self.site_name,
+                "category": category
             }
+        except asyncio.TimeoutError:
+            print(f"[{self.site_name.upper()}/{category.upper()}] 기사 페이지 로딩 시간 초과: {article_url}")
+            return None
+        except aiohttp.ClientError as e:
+            print(f"[{self.site_name.upper()}/{category.upper()}] 기사 페이지 로딩 중 ClientError: {e}, URL: {article_url}")
+            return None
         except Exception as e:
-            print(f"[{self.site_name}] Error fetching or parsing content from {article_url}: {e}")
-        return None 
+            print(f"[{self.site_name.upper()}/{category.upper()}] HTML 가져오는 중 알 수 없는 오류 ({article_url}): {e}")
+            return None
+
+# 테스트 코드 (main 함수) 수정
+# ... existing code ... 

@@ -1,0 +1,21 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+venv/
+.venv/
+
+# Docker
+Dockerfile
+
+# 기타
+.idea/
+.vscode/
+notebooks(테스트용)/
+data/raw/ 
