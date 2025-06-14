@@ -25,12 +25,12 @@ COLLECTOR_CLASSES = {
     "the_guardian": GuardianCollector,
     # "npr": NprCollector,
     "the_times": TheTimesCollector, # TheTimesCollector 추가
-    "yonhap": YonhapCollector,
-    "chosun": ChosunCollector,
-    "joongang": JoongangCollector,
-    "donga": DongaCollector,
-    "hankyoreh": HankyorehCollector,
-    "kyunghyang": KyunghyangCollector,
+    "연합": YonhapCollector,
+    "조선": ChosunCollector,
+    "중앙": JoongangCollector,
+    "동아": DongaCollector,
+    "한겨레": HankyorehCollector,
+    "경향": KyunghyangCollector,
 }
 
 def get_collector_class(name):

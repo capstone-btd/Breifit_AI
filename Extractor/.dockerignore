@@ -1,21 +1,37 @@
-# Git
+# Git / version control
 .git
 .gitignore
 
-# Python
+# Docker
+.dockerignore
+Dockerfile
+
+# IDE / Editor specific
+.idea
+.vscode
+*.swp
+
+# Python cache
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.env
-venv/
-.venv/
 
-# Docker
-Dockerfile
+# Python virtual environment
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Test / Coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# README
+README.md
 
 # 기타
-.idea/
-.vscode/
 notebooks(테스트용)/
 data/raw/ 

@@ -3,12 +3,15 @@ import json
 import os
 import subprocess
 import sys
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from typing import List, Dict, Any
 
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
+# Google Trends 스크립트 import
+from scripts.google_trends import get_trending_keywords
 
 app = FastAPI()
 
@@ -100,6 +103,38 @@ async def collect_and_get_data():
         import traceback
         traceback.print_exc()
         return JSONResponse(status_code=500, content={"message": f"서버 내부 오류가 발생했습니다: {e}"})
+
+@app.get("/trends/korea")
+async def get_korea_trends():
+    """
+    한국 실시간 트렌드 키워드 조회 함수
+    input : 없음
+    output : 한국 실시간 트렌드 키워드 (JSON형식)
+    """
+    try:
+        trends_data = get_trending_keywords(region="KR")
+        return {
+            "region": "Korea",
+            "keywords": trends_data
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"트렌드 데이터 조회 실패: {str(e)}")
+
+@app.get("/trends/global")
+async def get_global_trends():
+    """
+    글로벌 실시간 트렌드 키워드 조회 함수
+    input : 없음
+    output : 글로벌 실시간 트렌드 키워드 (JSON형식)
+    """
+    try:
+        trends_data = get_trending_keywords(region="")
+        return {
+            "region": "Global",
+            "keywords": trends_data
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"트렌드 데이터 조회 실패: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
