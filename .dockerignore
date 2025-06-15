@@ -1,0 +1,32 @@
+# .dockerignore
+
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-cache/
+.env
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Data files
+data/
+*.csv
+*.db
+*.sqlite3
+
+# Windows
+Thumbs.db 

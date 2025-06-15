@@ -4,12 +4,14 @@ import sys
 from datetime import datetime
 from typing import List, Dict, Any
 
+from slugify import slugify
+
 # 프로젝트 루트 경로 설정
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
-from src.utils.file_helper import load_json, save_json_async, get_output_path, slugify
+from src.utils.file_helper import load_json, save_json_async, get_output_path
 from src.processing.article_grouper import group_articles # 그룹화 함수 임포트
 
 RAW_DATA_DIR = os.path.join(PROJECT_ROOT, 'data', 'raw')
@@ -87,7 +89,10 @@ async def main():
         if not group_id: # group_id가 없는 경우 (article_grouper.py의 임시 로직 고려)
             # 임시 ID 생성 또는 대표 제목 기반으로 생성
             rep_title = group_data.get('representative_title', 'untitled_group')
-            group_id = slugify(rep_title) if rep_title else f"group_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{saved_group_count}"
+            if rep_title:
+                group_id = slugify(rep_title)
+            else:
+                group_id = f"group_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{saved_group_count}"
             group_data['group_id'] = group_id # 데이터에도 group_id 업데이트
 
         # 그룹 저장 시, 사이트명이나 카테고리명이 필요 없을 수 있음. 

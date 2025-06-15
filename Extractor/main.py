@@ -1,10 +1,18 @@
 import asyncio
+import sys
+
+# Windows에서 Playwright 비동기 실행 시 발생하는 NotImplementedError 해결
+# 다른 어떤 import보다도 먼저 실행되어야 함.
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 import json
 import os
-import sys
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from typing import List, Dict, Any
+from contextlib import asynccontextmanager
+import logging
 
 # Add the parent directory to the path to allow relative imports
 # 프로젝트 루트 경로를 sys.path에 추가
@@ -16,8 +24,28 @@ if PROJECT_ROOT not in sys.path:
 from scripts.google_trends import get_trending_keywords
 # 데이터 수집 파이프라인 import
 from scripts.run_collection import run_collection_pipeline
+from src.utils.browser_manager import start_browser, stop_browser, get_browser
+from src.utils.logger import setup_logger
+from DB.database import engine, Base
+from DB import models
 
-app = FastAPI()
+# 기본 로거 설정
+setup_logger()
+
+# 서버 시작 시 데이터베이스 테이블 생성
+models.Base.metadata.create_all(bind=engine)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 애플리케이션 시작 시
+    print("[Main] 애플리케이션 시작... (Async) 브라우저를 실행합니다.")
+    await start_browser()
+    yield
+    # 애플리케이션 종료 시
+    print("[Main] 애플리케이션 종료... 브라우저를 닫습니다.")
+    await stop_browser()
+
+app = FastAPI(lifespan=lifespan)
 
 # 상수 정의
 # Extractor 폴더가 프로젝트 루트라고 가정
@@ -36,80 +64,79 @@ def get_all_collected_data() -> List[Dict[str, Any]]:
         print(f"[main.py] 경고: 데이터 디렉토리({RAW_DATA_DIR})가 존재하지 않습니다.")
         return all_data
 
-    # data/raw/{collection_time_str}/{site_name}/{category_name}/{filename}.json 구조를 순회
+    # data/raw/{collection_time_str}/{category_name}/{filename}.json 구조를 순회
     for collection_folder in os.listdir(RAW_DATA_DIR):
         collection_path = os.path.join(RAW_DATA_DIR, collection_folder)
         if not os.path.isdir(collection_path): continue
 
-        for site_name in os.listdir(collection_path):
-            site_path = os.path.join(collection_path, site_name)
-            if not os.path.isdir(site_path): continue
+        for category_name in os.listdir(collection_path):
+            category_path = os.path.join(collection_path, category_name)
+            if not os.path.isdir(category_path): continue
 
-            for category_name in os.listdir(site_path):
-                category_path = os.path.join(site_path, category_name)
-                if not os.path.isdir(category_path): continue
-
-                for filename in os.listdir(category_path):
-                    if filename.endswith(".json"):
-                        file_path = os.path.join(category_path, filename)
-                        try:
-                            with open(file_path, 'r', encoding='utf-8') as f:
-                                data = json.load(f)
-                                all_data.append(data)
-                        except Exception as e:
-                            print(f"[main.py] JSON 파일 읽기/파싱 오류 {file_path}: {e}")
+            for filename in os.listdir(category_path):
+                if filename.endswith(".json"):
+                    file_path = os.path.join(category_path, filename)
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                            all_data.append(data)
+                    except Exception as e:
+                        print(f"[main.py] JSON 파일 읽기/파싱 오류 {file_path}: {e}")
     print(f"[main.py] 총 {len(all_data)}개의 데이터를 읽었습니다.")
     return all_data
 
-
-@app.get("/collect", response_model=List[Dict[str, Any]])
-async def collect_and_get_data():
-    """
-    기능: 데이터 수집 파이프라인을 실행하고, 수집된 모든 데이터를 JSON으로 반환한다.
-    input: 없음 (HTTP GET 요청)
-    output: 수집된 전체 기사 데이터 (JSONResponse)
-    """
-    print("\n[main.py] /collect 엔드포인트 요청 수신")
+@app.post("/collect", summary="뉴스 수집 및 DB 저장", description="설정 파일에 명시된 모든 언론사의 뉴스를 수집하여 DB에 저장하고, 새로 저장된 기사의 수를 반환합니다.")
+async def run_collection_endpoint():
+    logger = logging.getLogger(__name__) # logging 모듈에서 직접 로거 가져오기
+    logger.info("'/collect' 엔드포인트 호출됨. 전체 뉴스 수집 파이프라인 시작.")
+    
     try:
-        # 데이터 수집 파이프라인 직접 호출
-        await run_collection_pipeline(raw_data_base_dir=RAW_DATA_DIR)
+        # DB에 저장하는 파이프라인 실행하고 새로 추가된 기사 수를 받음
+        added_count = await run_collection_pipeline()
         
-        # 수집된 데이터 읽기
-        collected_data = get_all_collected_data()
-        
-        if not collected_data:
-            print("[main.py] 데이터 수집 후 파일을 읽었지만 데이터가 없습니다.")
-            return JSONResponse(status_code=404, content={"message": "데이터 수집은 완료되었으나, 반환할 데이터가 없습니다."})
-            
-        print(f"[main.py] 총 {len(collected_data)}개의 기사 데이터를 반환합니다.")
-        return collected_data
+        logger.info(f"총 {added_count}개의 새 기사 수집 및 DB 저장 완료.")
+        return JSONResponse(
+            status_code=200,
+            content={"message": f"총 {added_count}개의 새 기사가 DB에 저장되었습니다.", "new_articles_count": added_count}
+        )
     except Exception as e:
-        print(f"[main.py] '/collect' 엔드포인트에서 예기치 않은 오류 발생: {e}")
-        import traceback
-        traceback.print_exc()
-        return JSONResponse(status_code=500, content={"message": f"서버 내부 오류가 발생했습니다: {e}"})
+        logger.error(f"'/collect' 엔드포인트 처리 중 심각한 오류 발생: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500, 
+            detail=f"뉴스 수집 파이프라인 실행 중 오류가 발생했습니다: {e}"
+        )
 
 @app.get("/trends/korea")
 async def get_korea_trends():
     """
-    한국 실시간 트렌드 키워드 조회 (Selenium 스크레이핑)
+    한국 실시간 트렌드 키워드 조회 (Playwright 비동기 방식 - 브라우저 재사용)
     input : 없음
     output : 한국 실시간 트렌드 키워드 (JSON형식)
     """
-    print("Received request for /trends/korea. Starting NEW Selenium scraper...")
+    print("\n[main.py] /trends/korea 엔드포인트 요청 수신")
+    
+    browser = get_browser()
+    if not browser:
+        print("[main.py] 에러: 브라우저 인스턴스를 사용할 수 없습니다.")
+        raise HTTPException(status_code=500, detail="서버에 브라우저가 준비되지 않았습니다. 서버 로그를 확인해주세요.")
+
     try:
-        trends_data = get_trending_keywords()
+        trends_data = await get_trending_keywords(browser)
         if trends_data:
-            print("Successfully scraped data. Returning JSON response.")
+            print("[main.py] Playwright 스크레이핑 성공. JSON 응답을 반환합니다.")
             return JSONResponse(content={"keywords": trends_data})
         else:
-            print("Scraper returned no data or failed.")
+            print("[main.py] Playwright 스크레이퍼가 데이터를 반환하지 못했거나 실패했습니다.")
             raise HTTPException(status_code=500, detail="스크래핑을 통해 구글 트렌드 데이터를 가져오는데 실패했습니다.")
             
     except Exception as e:
-        print(f"An error occurred during scraping: {e}")
+        print(f"[main.py] /trends/korea 엔드포인트 처리 중 예외 발생: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"트렌드 데이터 조회 중 서버 오류 발생: {str(e)}")
 
 if __name__ == "__main__":
+    # 이 파일을 직접 실행하면 Uvicorn 서버가 시작됩니다.
+    # Windows에서 asyncio 정책 설정 후 서버를 실행하기 위해 이 방식을 사용합니다.
     import uvicorn
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run(app, host="127.0.0.1", port=8001)

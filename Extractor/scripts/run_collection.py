@@ -2,12 +2,19 @@ import asyncio
 import yaml
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 import json
 from pathlib import Path
 from typing import Dict, Any
-from slugify import slugify as python_slugify
+from slugify import slugify
+import aiohttp
+import base64
+
+# DB 연동을 위한 모듈 import
+from sqlalchemy.orm import Session
+from DB.database import SessionLocal
+from DB import crud, models
 
 # 프로젝트 루트 경로
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -84,9 +91,9 @@ def load_config(config_path: str) -> Dict:
         print(f"설정 파일 로드 실패: {e}")
         return {}
 
-def get_output_path(base_dir: str, site_name: str, category_name: str, filename: str, collection_time_str: str) -> str:
-    """기사 저장 경로 생성"""
-    path = os.path.join(base_dir, collection_time_str, site_name, category_name)
+def get_output_path(base_dir: str, category_name: str, filename: str, collection_time_str: str) -> str:
+    """기사 저장 경로 생성 (카테고리 폴더에 바로 저장)"""
+    path = os.path.join(base_dir, collection_time_str, category_name)
     os.makedirs(path, exist_ok=True)
     return os.path.join(path, filename)
 
@@ -100,8 +107,33 @@ async def save_json_async(data: dict, file_path: str) -> None:
         print(f"파일 저장 실패 ({file_path}): {e}")
         raise
 
-def preprocess_article(article: dict) -> dict:
-    """기사 데이터 전처리"""
+async def download_and_encode_image(session: aiohttp.ClientSession, url: str, retries: int = 2, delay: int = 2) -> str | None:
+    """URL에서 이미지를 비동기적으로 다운로드하고 Base64로 인코딩합니다. (재시도 로직 포함)"""
+    if not url or not url.startswith('http'):
+        return None
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
+    
+    for attempt in range(retries + 1):
+        try:
+            async with session.get(url, timeout=20, headers=headers) as response: # 타임아웃 20초로 증가
+                response.raise_for_status()
+                image_bytes = await response.read()
+                return base64.b64encode(image_bytes).decode('utf-8')
+        except asyncio.TimeoutError:
+            print(f"  - 경고: 이미지 다운로드 시간 초과 (시도 {attempt + 1}/{retries + 1}), URL: {url}")
+        except Exception as e:
+            print(f"  - 경고: 이미지 다운로드 중 오류 발생 (시도 {attempt + 1}/{retries + 1}): {e}, URL: {url}")
+        
+        if attempt < retries:
+            await asyncio.sleep(delay) # 재시도 전 잠시 대기
+            
+    return None
+
+async def preprocess_article(article: dict, press_company: str) -> dict:
+    """기사 데이터 전처리 (번역 포함)"""
     if not article or not isinstance(article, dict):
         return None
 
@@ -109,34 +141,46 @@ def preprocess_article(article: dict) -> dict:
         print(f"경고: 필수 정보(제목 또는 URL)가 없는 기사가 있어 건너뜁니다: {article}")
         return None
 
+    # press_company를 설정 파일의 키(예: '중앙')로 설정
+    article['source'] = press_company
+
+    # Base64 인코딩 로직이 사라졌으므로, 이미지 URL은 그대로 유지됩니다.
+    # main_image_url 키를 image_url로 변경하여 DB 스키마와 맞춥니다.
+    if 'main_image_url' in article:
+        article['image_url'] = article.pop('main_image_url')
+
     original_article_text = article.get('article_text', '')
     if original_article_text:
         processed_text = preprocess_text_simple(original_article_text)
-        article['article_text'] = processed_text
+        # 키 이름을 'body'로 변경
+        article['body'] = processed_text
         print(f"  - '{article['title'][:30]}' 기사 전처리 완료.")
     else:
-        article['article_text'] = ""
+        article['body'] = ""
+    
+    # 더 이상 사용되지 않는 'article_text' 키 삭제
+    if 'article_text' in article:
+        del article['article_text']
 
-    if len(article.get('article_text', '').strip()) < 30:
+    if len(article.get('body', '').strip()) < 30:
         print(f"  - 경고: 최종 기사 내용이 30자 미만이라 저장하지 않습니다. (제목: '{article['title'][:30]}...')")
         return None
 
     # 번역 처리 (영어 기사인 경우)
     current_translator = get_translator()
-    if current_translator and article.get('article_text'):
-        # 영어 텍스트인지 확인 (간단한 방법: 영어 문자 비율 체크)
-        english_chars = sum(1 for c in article['article_text'] if c.isascii() and c.isalpha())
-        total_chars = sum(1 for c in article['article_text'] if c.isalpha())
+    if current_translator and article.get('body'):
+        english_chars = sum(1 for c in article['body'] if c.isascii() and c.isalpha())
+        total_chars = sum(1 for c in article['body'] if c.isalpha())
         
-        if total_chars > 0 and english_chars / total_chars > 0.7:  # 70% 이상이 영어인 경우
+        if total_chars > 0 and english_chars / total_chars > 0.7:
             try:
                 # 기사 본문 번역
-                translated_text = current_translator.translate(article['article_text'])
-                article['article_text'] = translated_text
+                translated_text = current_translator.translate(article['body'])
+                article['body'] = translated_text
                 print(f"  - '{article['title'][:30]}' 기사 본문 번역 완료.")
                 
                 # 제목 번역
-                translated_title = current_translator.translate_single(article['title'])
+                translated_title = current_translator.translate(article['title'])
                 article['title'] = translated_title
                 print(f"  - '{article['title'][:30]}' 제목 번역 완료.")
                 
@@ -145,18 +189,20 @@ def preprocess_article(article: dict) -> dict:
 
     return article
 
-async def run_collection_for_site(site_name: str, site_config: dict, collection_time_str: str, raw_data_base_dir: str):
-    """특정 언론사의 모든 카테고리에서 기사 수집"""
+async def run_collection_for_site(site_name: str, site_config: dict, api_call_time: datetime, session: aiohttp.ClientSession, db: Session) -> int:
+    """
+    특정 언론사의 모든 카테고리에서 기사 수집.
+    성공적으로 DB에 추가된 기사의 수를 반환합니다.
+    """
     print(f"\n[run_collection] {site_name.upper()} 수집 시작...")
     
     collector = get_collector_for_site(site_name, site_config)
-    if not collector:
-        return
+    if not collector: return 0
 
     categories_config = site_config.get('categories', {})
     if not categories_config:
         print(f"경고: {site_name}에 대한 카테고리 설정이 없습니다. 건너뜁니다.")
-        return
+        return 0
 
     category_tasks = []
     for category_display_name, category_path_segment in categories_config.items():
@@ -168,10 +214,12 @@ async def run_collection_for_site(site_name: str, site_config: dict, collection_
 
     if not category_tasks:
         print(f"경고: {site_name}에 대한 유효한 카테고리 설정이 없습니다.")
-        return
+        return 0
 
     category_results = await asyncio.gather(*category_tasks, return_exceptions=True)
     
+    newly_added_count = 0
+
     for result in category_results:
         if isinstance(result, Exception):
             print(f"카테고리 수집 중 오류 발생: {result}")
@@ -182,55 +230,85 @@ async def run_collection_for_site(site_name: str, site_config: dict, collection_
             continue
 
         category_display_name = articles_data[0].get('category', 'etc') if articles_data else 'etc'
-        print(f"카테고리 '{category_display_name}' ({site_name})에서 {len(articles_data)}개 기사 수집 완료. 전처리 및 파일 저장 시작...")
+        print(f"카테고리 '{category_display_name}' ({site_name})에서 {len(articles_data)}개 기사 수집 완료. 전처리 및 DB 저장 시작...")
         
-        save_tasks = []
-        for article in articles_data:
-            if article and isinstance(article, dict):
-                processed_article = preprocess_article(article)
-                if processed_article:
-                    article_title_slug = python_slugify(processed_article['title'])
-                    if not article_title_slug:
-                        article_title_slug = f"untitled-article-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
-                    
-                    output_filename = f"{article_title_slug}.json"
-                    file_path = get_output_path(
-                        raw_data_base_dir,
-                        site_name,
-                        category_display_name,
-                        output_filename,
-                        collection_time_str
-                    )
-                    save_tasks.append(save_json_async(processed_article, file_path))
-        
-        if save_tasks:
-            await asyncio.gather(*save_tasks, return_exceptions=True)
+        async def process_and_save_to_db(article_data: dict) -> bool:
+            """단일 기사를 전처리하고 DB에 저장. 성공 시 True 반환"""
+            if not article_data or not isinstance(article_data, dict):
+                return False
 
-async def run_collection_pipeline(raw_data_base_dir: str):
+            title = article_data.get('title', '제목 없음')
+            try:
+                processed_article = await preprocess_article(article_data, site_name)
+                if processed_article:
+                    processed_article['created_at'] = api_call_time # API 호출 시간 추가
+                    # crud 함수는 동기 함수이므로 to_thread로 실행
+                    created_article = await asyncio.to_thread(
+                        crud.create_article_with_image, db, processed_article
+                    )
+                    if created_article:
+                        print(f"  - DB 저장 완료: '{created_article.title[:30]}...' (ID: {created_article.id})")
+                        return True
+                    # create_article_with_image가 None을 반환하는 경우 (예: 중복)은 이미 crud에서 로그를 남기므로 여기서는 별도 처리 안 함
+                else:
+                    print(f"  - 기사 '{title[:30]}...' 전처리 후 내용이 없어 저장하지 않습니다.")
+            
+            except Exception as e:
+                # 상세한 오류 로깅
+                print(f"!!! 기사 '{title[:30]}...' 처리/저장 중 심각한 오류 발생: {e}")
+                import traceback
+                traceback.print_exc()
+
+            return False
+
+        # --- 병렬 처리 제거: 순차적으로 기사 처리 ---
+        for article_data in articles_data:
+            success = await process_and_save_to_db(article_data)
+            if success:
+                newly_added_count += 1
+    
+    return newly_added_count
+
+async def run_collection_pipeline() -> int:
     """
-    전체 뉴스 수집 파이프라인을 실행하는 메인 함수. main.py에서 호출됩니다.
+    전체 뉴스 수집 파이프라인을 실행하는 메인 함수.
+    언론사별로 순차적으로 실행하며, 최종적으로 새로 추가된 기사의 총 수를 반환합니다.
     """
     print("\n[run_collection] 전체 뉴스 수집 파이프라인 시작...")
     config = load_config(CONFIG_FILE_PATH)
     if not config:
         print("[run_collection] 에러: 설정 파일을 찾을 수 없어 파이프라인을 중단합니다.")
-        return
+        return 0
 
-    collection_time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    api_call_time = datetime.now() # API 호출 시점 기록
+    collection_time_str = api_call_time.strftime("%Y%m%d_%H%M%S")
     print(f"[run_collection] 뉴스 수집 시작 시간: {collection_time_str}")
 
-    site_tasks = [
-        run_collection_for_site(site_name, site_config, collection_time_str, raw_data_base_dir)
-        for site_name, site_config in config['sites'].items()
-    ]
-    await asyncio.gather(*site_tasks)
+    db = SessionLocal()
+    total_added_count = 0
+    try:
+        async with aiohttp.ClientSession() as session:
+            for site_name, site_config in config['sites'].items():
+                site_added_count = await run_collection_for_site(
+                    site_name, site_config, api_call_time, session, db
+                )
+                total_added_count += site_added_count
+    finally:
+        db.close()
+        print("[run_collection] 데이터베이스 세션을 닫았습니다.")
 
-    print(f"\n[run_collection] 모든 사이트의 뉴스 수집 완료: {collection_time_str}")
+    print(f"\n[run_collection] 모든 사이트의 뉴스 수집 완료. 총 {total_added_count}개의 새 기사가 DB에 저장되었습니다.")
+    return total_added_count
 
 if __name__ == "__main__":
     setup_logger()
     logging.info("="*50)
     logging.info("뉴스 기사 수집 스크립트 시작")
-    asyncio.run(run_collection_pipeline(RAW_DATA_BASE_DIR))
+    
+    added_count = asyncio.run(run_collection_pipeline())
+
+    print("\n--- 수집 완료 ---")
+    print(f"새롭게 DB에 추가된 기사 수: {added_count}")
+    
     logging.info("뉴스 기사 수집 스크립트 종료")
     logging.info("="*50 + "\n")

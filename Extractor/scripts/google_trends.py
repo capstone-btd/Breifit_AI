@@ -1,112 +1,114 @@
-import time
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
+from playwright.async_api import Browser, Page
 from bs4 import BeautifulSoup
 from pprint import pprint
 from typing import List, Dict, Any
+import os
+import asyncio
 
-def get_trending_keywords() -> List[Dict[str, Any]]:
-    url = "https://trends.google.com/trending?geo=KR&hl=ko&sort=search-volume&status=active&hours=48"
-    options = webdriver.ChromeOptions()
-    options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36")
-    options.add_argument("--log-level=3")
-    
-    driver = None
+async def get_trending_keywords(browser: Browser) -> List[Dict[str, Any]]:
+    print("\n[trends] 공유된 브라우저를 사용하여 스크레이핑 시작 (Async)...")
     html_source = ""
+    page: Page = None
+
     try:
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=options)
-
-        print("Google Trends 페이지에 접속합니다...")
-        driver.get(url)
-
-        wait = WebDriverWait(driver, 15)
-        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "tbody[jsname='cC57zf'] tr[jsname='oKdM2c']")))
-        print("페이지 데이터 로딩 완료.")
-
-        html_source = driver.page_source
+        print("[trends] 1. 새 페이지를 엽니다.")
+        page = await browser.new_page()
         
+        url = "https://trends.google.com/trending?geo=KR&hl=ko&sort=search-volume&status=active&hours=48"
+        print(f"[trends] 2. Google Trends URL로 이동합니다: {url}")
+        await page.goto(url, wait_until='domcontentloaded', timeout=30000)
+
+        print("[trends] 3. 쿠키 동의 팝업이 있는지 확인하고 처리합니다.")
+        cookie_button_selector = "button[aria-label='모두 동의']"
+        try:
+            await page.wait_for_selector(cookie_button_selector, timeout=5000)
+            print("[trends]    - '모두 동의' 버튼을 발견하여 클릭합니다.")
+            await page.click(cookie_button_selector)
+            await page.wait_for_load_state('domcontentloaded', timeout=5000)
+            print("[trends]    - 쿠키 팝업 처리가 완료되었습니다.")
+        except Exception:
+            print("[trends]    - 쿠키 동의 팝업이 없거나 이미 처리되었습니다. 계속 진행합니다.")
+
+        print("[trends] 4. 실제 데이터가 로드되기를 기다립니다.")
+        target_selector = "tbody[jsname='cC57zf'] tr[jsname='oKdM2c']"
+        await page.wait_for_selector(target_selector, timeout=20000)
+        print("[trends] 5. 데이터 로딩을 확인했습니다.")
+
+        html_source = await page.content()
+        print("[trends] 6. 페이지의 HTML 컨텐츠를 성공적으로 가져왔습니다.")
+
     except Exception as e:
-        print(f"Selenium 스크레이핑 중 오류 발생: {e}")
-        if driver and driver.page_source:
-            print("디버깅을 위해 현재 페이지의 HTML을 'scraping_debug.html' 파일로 저장합니다.")
-            with open("scraping_debug.html", "w", encoding="utf-8") as f:
-                f.write(driver.page_source)
+        print(f"\n!!! [trends] Playwright 스크레이핑 중 예외 발생: {e} !!!\n")
+        if page:
+            screenshot_path = "playwright_error_screenshot.png"
+            try:
+                await page.screenshot(path=screenshot_path, full_page=True)
+                print(f"오류 발생 시점의 스크린샷을 현재 폴더에 '{os.path.abspath(screenshot_path)}' 파일로 저장했습니다.")
+            except Exception as se:
+                print(f"스크린샷 저장 중 별도의 오류 발생: {se}")
         return []
     finally:
-        if driver:
-            driver.quit()
+        if page:
+            await page.close()
+            print("[trends] 7. 사용한 페이지를 닫았습니다. (브라우저는 계속 실행 중)")
 
     if not html_source:
-        print("오류: 페이지 소스를 가져오지 못했습니다.")
+        print("[trends] 오류: 페이지 소스를 가져오지 못했습니다.")
         return []
-
+    
     soup = BeautifulSoup(html_source, 'lxml')
     
     tbody = soup.find("tbody", attrs={"jsname": "cC57zf"})
     if not tbody:
-        print("오류: tbody[jsname='cC57zf'] 요소를 찾을 수 없습니다.")
-        print("디버깅을 위해 현재 페이지의 HTML을 'scraping_debug.html' 파일로 저장합니다.")
-        with open("scraping_debug.html", "w", encoding="utf-8") as f:
-            f.write(html_source)
+        print("[trends] 오류: tbody[jsname='cC57zf'] 요소를 찾을 수 없습니다.")
         return []
 
     trend_items = tbody.find_all("tr", attrs={"jsname":"oKdM2c"})
     
     if not trend_items:
-        print("오류: tbody 내에서 트렌드 행(tr)을 찾을 수 없습니다.")
-        print("디버깅을 위해 현재 페이지의 HTML을 'scraping_debug.html' 파일로 저장합니다.")
-        with open("scraping_debug.html", "w", encoding="utf-8") as f:
-            f.write(tbody.prettify())
+        print("[trends] 오류: tbody 내에서 트렌드 행(tr)을 찾을 수 없습니다.")
         return []
 
     results = []
-    for i, item in enumerate(trend_items):
+    for item in trend_items:
         keyword_el = item.select_one("div.mZ3RIc")
         search_volume_el = item.select_one("div.qNpYPd")
         
         if keyword_el and search_volume_el:
             keyword = keyword_el.get_text(strip=True).replace(" ", "")
             raw_search_volume = search_volume_el.get_text(strip=True)
-
-            processed_volume = raw_search_volume.replace("검색", "").replace("+회", "").strip()
             
             numeric_volume = 0
             try:
+                processed_volume = raw_search_volume.replace("검색", "").replace("+회", "").strip()
                 if "만" in processed_volume:
                     numeric_volume = int(float(processed_volume.replace("만", "")) * 10000)
                 elif "천" in processed_volume:
                     numeric_volume = int(float(processed_volume.replace("천", "")) * 1000)
                 else:
                     numeric_volume = int(processed_volume)
-            except ValueError:
+            except (ValueError, TypeError):
                 numeric_volume = 0
 
-            results.append({
-                "keyword": keyword,
-                "search_volume": numeric_volume
-            })
+            results.append({"keyword": keyword, "search_volume": numeric_volume})
             
-    if not results:
-        print("오류: tbody 내에서 트렌드 아이템(키워드/검색량)을 찾지 못했습니다.")
-        print("디버깅을 위해 현재 페이지의 HTML을 'scraping_debug.html' 파일로 저장합니다.")
-        with open("scraping_debug.html", "w", encoding="utf-8") as f:
-            f.write(tbody.prettify())
-
+    print(f"[trends] 총 {len(results)}개의 트렌드 키워드를 성공적으로 추출했습니다.")
     return results
 
 if __name__ == "__main__":
-    trending_keywords = get_trending_keywords()
+    # 이 파일을 직접 실행할 경우, 테스트를 위해 browser_manager를 사용합니다.
+    from browser_manager import start_browser, get_browser, stop_browser
     
-    if trending_keywords:
-        print("\n✅ Google Trends 실시간 인기 검색어 (한국)")
-        pprint(trending_keywords)
-    else:
-        print("데이터를 가져오는 데 실패했습니다.")
+    async def test_run():
+        await start_browser()
+        browser_instance = get_browser()
+        if browser_instance:
+            trending_keywords = await get_trending_keywords(browser_instance)
+            if trending_keywords:
+                print("\n✅ Google Trends 실시간 인기 검색어 (한국)")
+                pprint(trending_keywords)
+            else:
+                print("데이터를 가져오는 데 실패했습니다.")
+        await stop_browser()
+    
+    asyncio.run(test_run())
