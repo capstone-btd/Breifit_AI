@@ -7,7 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends git && \
+    apt-get install -y --no-install-recommends git build-essential && \
     rm -rf /var/lib/apt/lists/*
 COPY ./scripts/download_model.py ./scripts/download_model.py
 COPY ./requirements.txt .

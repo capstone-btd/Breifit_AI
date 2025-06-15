@@ -6,7 +6,6 @@ python-multipart
 requests
 beautifulsoup4
 lxml
-playwright
 Crawl4AI==0.6.3
 
 spacy
@@ -29,3 +28,6 @@ cchardet
 aiodns
 langdetect
 pytrends
+selenium
+webdriver_manager
+slugify

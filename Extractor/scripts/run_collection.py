@@ -48,25 +48,22 @@ COLLECTOR_CLASSES = {
     '경향': KyunghyangCollector
 }
 
-# 번역기 인스턴스
-translator = None
+# 번역기 인스턴스 - None으로 초기화하고, 필요할 때 생성
+translator: NllbTranslator = None
 
-def initialize_translator():
-    """번역기 초기화"""
+def get_translator() -> NllbTranslator:
+    """번역기 인스턴스를 가져온다 (없으면 새로 생성). 싱글턴 패턴."""
     global translator
     if translator is None:
+        print("[Translator] 번역기 인스턴스가 없으므로 새로 생성합니다...")
         try:
-            print("번역기 초기화 중... (NHNDQ/nllb-finetuned-en2ko)")
             translator = NllbTranslator()
             model_info = translator.get_model_info()
-            print(f"번역기 로드 완료: {model_info['model_name']}")
-            print(f"번역 방향: {model_info['source_language']} → {model_info['target_language']}")
-            return True
+            print(f"[Translator] 번역기 로드 완료: {model_info['model_name']}")
         except Exception as e:
-            print(f"번역기 초기화 실패: {e}")
-            translator = None
-            return False
-    return True
+            print(f"[Translator] 번역기 초기화 실패: {e}")
+            translator = None # 실패 시 다시 None으로 설정
+    return translator
 
 def get_collector_for_site(site_name: str, site_config: dict) -> Any:
     """사이트 이름에 해당하는 Collector 인스턴스 생성"""
@@ -125,7 +122,8 @@ def preprocess_article(article: dict) -> dict:
         return None
 
     # 번역 처리 (영어 기사인 경우)
-    if translator and article.get('article_text'):
+    current_translator = get_translator()
+    if current_translator and article.get('article_text'):
         # 영어 텍스트인지 확인 (간단한 방법: 영어 문자 비율 체크)
         english_chars = sum(1 for c in article['article_text'] if c.isascii() and c.isalpha())
         total_chars = sum(1 for c in article['article_text'] if c.isalpha())
@@ -133,12 +131,12 @@ def preprocess_article(article: dict) -> dict:
         if total_chars > 0 and english_chars / total_chars > 0.7:  # 70% 이상이 영어인 경우
             try:
                 # 기사 본문 번역
-                translated_text = translator.translate(article['article_text'])
+                translated_text = current_translator.translate(article['article_text'])
                 article['article_text'] = translated_text
                 print(f"  - '{article['title'][:30]}' 기사 본문 번역 완료.")
                 
                 # 제목 번역
-                translated_title = translator.translate_single(article['title'])
+                translated_title = current_translator.translate_single(article['title'])
                 article['title'] = translated_title
                 print(f"  - '{article['title'][:30]}' 제목 번역 완료.")
                 
@@ -147,9 +145,9 @@ def preprocess_article(article: dict) -> dict:
 
     return article
 
-async def run_collection_for_site(site_name: str, site_config: dict, collection_time_str: str):
+async def run_collection_for_site(site_name: str, site_config: dict, collection_time_str: str, raw_data_base_dir: str):
     """특정 언론사의 모든 카테고리에서 기사 수집"""
-    print(f"\n{site_name.upper()} 수집 시작...")
+    print(f"\n[run_collection] {site_name.upper()} 수집 시작...")
     
     collector = get_collector_for_site(site_name, site_config)
     if not collector:
@@ -163,30 +161,28 @@ async def run_collection_for_site(site_name: str, site_config: dict, collection_
     category_tasks = []
     for category_display_name, category_path_segment in categories_config.items():
         if isinstance(category_path_segment, list):
-            print(f"카테고리 '{category_display_name.upper()}' (다중 경로) 수집 준비: {category_path_segment}...")
             for path_segment in category_path_segment:
-                print(f"  경로 '{path_segment}' 수집 준비...")
                 category_tasks.append(collector.collect_by_category(category_display_name, path_segment))
         elif isinstance(category_path_segment, str):
-            print(f"카테고리 '{category_display_name.upper()}' 수집 준비 ({category_path_segment})...")
             category_tasks.append(collector.collect_by_category(category_display_name, category_path_segment))
-        else:
-            print(f"경고: 카테고리 '{category_display_name.upper()}'의 경로 형식이 올바르지 않습니다(문자열 또는 리스트여야 함): {category_path_segment}. 건너뜁니다.")
-            continue
+
+    if not category_tasks:
+        print(f"경고: {site_name}에 대한 유효한 카테고리 설정이 없습니다.")
+        return
 
     category_results = await asyncio.gather(*category_tasks, return_exceptions=True)
     
-    for category_display_name, result in zip(categories_config.keys(), category_results):
+    for result in category_results:
         if isinstance(result, Exception):
-            print(f"카테고리 '{category_display_name.upper()}' ({site_name}) 수집 중 오류 발생: {result}")
+            print(f"카테고리 수집 중 오류 발생: {result}")
             continue
             
         articles_data = result
         if not articles_data:
-            print(f"카테고리 '{category_display_name.upper()}' ({site_name})에서 수집된 기사가 없습니다.")
             continue
 
-        print(f"카테고리 '{category_display_name.upper()}' ({site_name})에서 {len(articles_data)}개의 기사 수집 완료. 전처리 및 파일 저장 시작...")
+        category_display_name = articles_data[0].get('category', 'etc') if articles_data else 'etc'
+        print(f"카테고리 '{category_display_name}' ({site_name})에서 {len(articles_data)}개 기사 수집 완료. 전처리 및 파일 저장 시작...")
         
         save_tasks = []
         for article in articles_data:
@@ -199,7 +195,7 @@ async def run_collection_for_site(site_name: str, site_config: dict, collection_
                     
                     output_filename = f"{article_title_slug}.json"
                     file_path = get_output_path(
-                        RAW_DATA_BASE_DIR,
+                        raw_data_base_dir,
                         site_name,
                         category_display_name,
                         output_filename,
@@ -208,33 +204,33 @@ async def run_collection_for_site(site_name: str, site_config: dict, collection_
                     save_tasks.append(save_json_async(processed_article, file_path))
         
         if save_tasks:
-            save_results = await asyncio.gather(*save_tasks, return_exceptions=True)
-            successful_saves = sum(1 for result in save_results if not isinstance(result, Exception))
-            print(f"카테고리 '{category_display_name.upper()}' ({site_name})에서 {successful_saves}개의 기사 저장 완료.")
+            await asyncio.gather(*save_tasks, return_exceptions=True)
 
-async def main():
-    """메인 실행 함수"""
-    # 번역기 초기화
-    if not initialize_translator():
-        print("경고: 번역 기능 없이 실행됩니다.")
-
+async def run_collection_pipeline(raw_data_base_dir: str):
+    """
+    전체 뉴스 수집 파이프라인을 실행하는 메인 함수. main.py에서 호출됩니다.
+    """
+    print("\n[run_collection] 전체 뉴스 수집 파이프라인 시작...")
     config = load_config(CONFIG_FILE_PATH)
     if not config:
+        print("[run_collection] 에러: 설정 파일을 찾을 수 없어 파이프라인을 중단합니다.")
         return
 
     collection_time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-    print(f"\n뉴스 수집 시작: {collection_time_str}")
+    print(f"[run_collection] 뉴스 수집 시작 시간: {collection_time_str}")
 
-    for site_name, site_config in config['sites'].items():
-        await run_collection_for_site(site_name, site_config, collection_time_str)
-        await asyncio.sleep(5)
+    site_tasks = [
+        run_collection_for_site(site_name, site_config, collection_time_str, raw_data_base_dir)
+        for site_name, site_config in config['sites'].items()
+    ]
+    await asyncio.gather(*site_tasks)
 
-    print(f"\n뉴스 수집 완료: {collection_time_str}")
+    print(f"\n[run_collection] 모든 사이트의 뉴스 수집 완료: {collection_time_str}")
 
 if __name__ == "__main__":
     setup_logger()
     logging.info("="*50)
     logging.info("뉴스 기사 수집 스크립트 시작")
-    asyncio.run(main())
+    asyncio.run(run_collection_pipeline(RAW_DATA_BASE_DIR))
     logging.info("뉴스 기사 수집 스크립트 종료")
     logging.info("="*50 + "\n")

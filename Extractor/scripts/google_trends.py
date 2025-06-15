@@ -1,99 +1,112 @@
-from pytrends.request import TrendReq
-import pandas as pd
-from typing import List, Dict
 import time
-import random
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
+from bs4 import BeautifulSoup
+from pprint import pprint
+from typing import List, Dict, Any
 
-def get_trending_keywords(region: str = "KR", limit: int = 20) -> List[Dict[str, any]]:
-    """
-    Google Trends에서 실시간 트렌드 키워드 조회
+def get_trending_keywords() -> List[Dict[str, Any]]:
+    url = "https://trends.google.com/trending?geo=KR&hl=ko&sort=search-volume&status=active&hours=48"
+    options = webdriver.ChromeOptions()
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36")
+    options.add_argument("--log-level=3")
     
-    Args:
-        region (str): 지역 코드 ("KR" for Korea, "" for Global)
-        limit (int): 반환할 키워드 개수
-        
-    Returns:
-        List[Dict]: [{"keyword": "키워드", "value": 트렌드값}, ...]
-    """
+    driver = None
+    html_source = ""
     try:
-        # pytrends 객체 생성
-        pytrends = TrendReq(hl='ko' if region == "KR" else 'en', tz=540)
-        
-        # 실시간 트렌드 검색어 가져오기 (단순화)
-        trending_searches = pytrends.trending_searches(pn='south_korea' if region == "KR" else 'united_states')
-        
-        if not trending_searches.empty:
-            # 상위 키워드들 선택
-            top_keywords = trending_searches.head(limit)[0].tolist()
-            
-            # 키워드와 순위 기반 값 생성 (API 호출 최소화)
-            keywords_data = []
-            for i, keyword in enumerate(top_keywords):
-                trend_value = max(100 - i * 2, 10)  # 순위 기반 값
-                keywords_data.append({
-                    "keyword": keyword,
-                    "value": trend_value
-                })
-            
-            return keywords_data
-        else:
-            return get_dummy_trends_data(region)
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=options)
+
+        print("Google Trends 페이지에 접속합니다...")
+        driver.get(url)
+
+        wait = WebDriverWait(driver, 15)
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "tbody[jsname='cC57zf'] tr[jsname='oKdM2c']")))
+        print("페이지 데이터 로딩 완료.")
+
+        html_source = driver.page_source
         
     except Exception as e:
-        print(f"트렌드 데이터 조회 실패: {e}")
-        # 오류 발생 시 더미 데이터 반환
-        return get_dummy_trends_data(region)
+        print(f"Selenium 스크레이핑 중 오류 발생: {e}")
+        if driver and driver.page_source:
+            print("디버깅을 위해 현재 페이지의 HTML을 'scraping_debug.html' 파일로 저장합니다.")
+            with open("scraping_debug.html", "w", encoding="utf-8") as f:
+                f.write(driver.page_source)
+        return []
+    finally:
+        if driver:
+            driver.quit()
 
-def get_dummy_trends_data(region: str) -> List[Dict[str, any]]:
-    """
-    오류 발생 시 더미 트렌드 데이터 반환
-    """
-    if region == "KR":
-        dummy_keywords = [
-            {"keyword": "날씨", "value": 95},
-            {"keyword": "뉴스", "value": 88},
-            {"keyword": "코로나", "value": 82},
-            {"keyword": "주식", "value": 76},
-            {"keyword": "부동산", "value": 71},
-            {"keyword": "정치", "value": 65},
-            {"keyword": "경제", "value": 59},
-            {"keyword": "스포츠", "value": 54},
-            {"keyword": "연예", "value": 48},
-            {"keyword": "게임", "value": 43}
-        ]
-    else:
-        dummy_keywords = [
-            {"keyword": "weather", "value": 95},
-            {"keyword": "news", "value": 88},
-            {"keyword": "covid", "value": 82},
-            {"keyword": "stocks", "value": 76},
-            {"keyword": "politics", "value": 71},
-            {"keyword": "sports", "value": 65},
-            {"keyword": "technology", "value": 59},
-            {"keyword": "health", "value": 54},
-            {"keyword": "entertainment", "value": 48},
-            {"keyword": "business", "value": 43}
-        ]
-    
-    return dummy_keywords
+    if not html_source:
+        print("오류: 페이지 소스를 가져오지 못했습니다.")
+        return []
 
-def get_keyword_trends(keywords: List[str], region: str = "KR") -> List[Dict[str, any]]:
-    """
-    특정 키워드들의 트렌드 값 조회
+    soup = BeautifulSoup(html_source, 'lxml')
     
-    Args:
-        keywords (List[str]): 조회할 키워드 리스트
-        region (str): 지역 코드
-        
-    Returns:
-        List[Dict]: [{"keyword": "키워드", "value": 트렌드값}, ...]
-    """
-    # 간단한 더미 값 반환 (API 호출 최소화)
+    tbody = soup.find("tbody", attrs={"jsname": "cC57zf"})
+    if not tbody:
+        print("오류: tbody[jsname='cC57zf'] 요소를 찾을 수 없습니다.")
+        print("디버깅을 위해 현재 페이지의 HTML을 'scraping_debug.html' 파일로 저장합니다.")
+        with open("scraping_debug.html", "w", encoding="utf-8") as f:
+            f.write(html_source)
+        return []
+
+    trend_items = tbody.find_all("tr", attrs={"jsname":"oKdM2c"})
+    
+    if not trend_items:
+        print("오류: tbody 내에서 트렌드 행(tr)을 찾을 수 없습니다.")
+        print("디버깅을 위해 현재 페이지의 HTML을 'scraping_debug.html' 파일로 저장합니다.")
+        with open("scraping_debug.html", "w", encoding="utf-8") as f:
+            f.write(tbody.prettify())
+        return []
+
     results = []
-    for i, keyword in enumerate(keywords):
-        results.append({
-            "keyword": keyword,
-            "value": random.randint(30, 90)
-        })
+    for i, item in enumerate(trend_items):
+        keyword_el = item.select_one("div.mZ3RIc")
+        search_volume_el = item.select_one("div.qNpYPd")
+        
+        if keyword_el and search_volume_el:
+            keyword = keyword_el.get_text(strip=True).replace(" ", "")
+            raw_search_volume = search_volume_el.get_text(strip=True)
+
+            processed_volume = raw_search_volume.replace("검색", "").replace("+회", "").strip()
+            
+            numeric_volume = 0
+            try:
+                if "만" in processed_volume:
+                    numeric_volume = int(float(processed_volume.replace("만", "")) * 10000)
+                elif "천" in processed_volume:
+                    numeric_volume = int(float(processed_volume.replace("천", "")) * 1000)
+                else:
+                    numeric_volume = int(processed_volume)
+            except ValueError:
+                numeric_volume = 0
+
+            results.append({
+                "keyword": keyword,
+                "search_volume": numeric_volume
+            })
+            
+    if not results:
+        print("오류: tbody 내에서 트렌드 아이템(키워드/검색량)을 찾지 못했습니다.")
+        print("디버깅을 위해 현재 페이지의 HTML을 'scraping_debug.html' 파일로 저장합니다.")
+        with open("scraping_debug.html", "w", encoding="utf-8") as f:
+            f.write(tbody.prettify())
+
+    return results
+
+if __name__ == "__main__":
+    trending_keywords = get_trending_keywords()
     
-    return results 
+    if trending_keywords:
+        print("\n✅ Google Trends 실시간 인기 검색어 (한국)")
+        pprint(trending_keywords)
+    else:
+        print("데이터를 가져오는 데 실패했습니다.")
