@@ -24,6 +24,8 @@ if PROJECT_ROOT not in sys.path:
 from scripts.google_trends import get_trending_keywords
 # 데이터 수집 파이프라인 import
 from scripts.run_collection import run_collection_pipeline
+# 데이터 처리 파이프라인 import
+from scripts.run_processing import run_processing_pipeline
 from src.utils.browser_manager import start_browser, stop_browser, get_browser
 from src.utils.logger import setup_logger
 from DB.database import engine, Base
@@ -85,25 +87,48 @@ def get_all_collected_data() -> List[Dict[str, Any]]:
     print(f"[main.py] 총 {len(all_data)}개의 데이터를 읽었습니다.")
     return all_data
 
-@app.post("/collect", summary="뉴스 수집 및 DB 저장", description="설정 파일에 명시된 모든 언론사의 뉴스를 수집하여 DB에 저장하고, 새로 저장된 기사의 수를 반환합니다.")
+@app.post("/collect", summary="뉴스 수집 및 로컬 저장", description="설정 파일에 명시된 모든 언론사의 뉴스를 수집하여 로컬 파일 시스템에 JSON으로 저장합니다.")
 async def run_collection_endpoint():
-    logger = logging.getLogger(__name__) # logging 모듈에서 직접 로거 가져오기
-    logger.info("'/collect' 엔드포인트 호출됨. 전체 뉴스 수집 파이프라인 시작.")
+    logger = logging.getLogger(__name__)
+    logger.info("'/collect' 엔드포인트 호출됨. 뉴스 수집 및 로컬 저장 파이프라인 시작.")
     
     try:
-        # DB에 저장하는 파이프라인 실행하고 새로 추가된 기사 수를 받음
-        added_count = await run_collection_pipeline()
+        # 로컬에 파일로 저장하는 파이프라인 실행
+        files_saved_count = await run_collection_pipeline()
         
-        logger.info(f"총 {added_count}개의 새 기사 수집 및 DB 저장 완료.")
+        logger.info(f"총 {files_saved_count}개의 새 기사 수집 및 로컬 저장 완료.")
         return JSONResponse(
             status_code=200,
-            content={"message": f"총 {added_count}개의 새 기사가 DB에 저장되었습니다.", "new_articles_count": added_count}
+            content={"message": f"총 {files_saved_count}개의 새 기사가 로컬에 저장되었습니다.", "files_saved_count": files_saved_count}
         )
     except Exception as e:
         logger.error(f"'/collect' 엔드포인트 처리 중 심각한 오류 발생: {e}", exc_info=True)
         raise HTTPException(
             status_code=500, 
             detail=f"뉴스 수집 파이프라인 실행 중 오류가 발생했습니다: {e}"
+        )
+
+@app.post("/process", summary="수집된 뉴스 처리 및 DB 저장", description="로컬에 저장된 뉴스 JSON 파일들을 읽어 그룹핑, 요약 후 DB에 최종 저장합니다.")
+async def run_processing_endpoint():
+    logger = logging.getLogger(__name__)
+    logger.info("'/process' 엔드포인트 호출됨. 기사 처리 및 DB 저장 파이프라인 시작.")
+
+    try:
+        # 동기 함수인 run_processing_pipeline을 실행합니다.
+        # FastAPI는 이를 자동으로 스레드 풀에서 실행하여 이벤트 루프를 막지 않습니다.
+        run_processing_pipeline()
+        
+        # run_processing_pipeline 내부에서 상세한 로그를 남기므로, 여기서는 성공 메시지만 반환합니다.
+        # 처리된 기사 수를 정확히 반환하려면 run_processing_pipeline 수정이 필요합니다.
+        return JSONResponse(
+            status_code=200,
+            content={"message": "기사 처리 및 DB 저장 파이프라인이 성공적으로 실행되었습니다. 상세 내용은 서버 로그를 확인하세요."}
+        )
+    except Exception as e:
+        logger.error(f"'/process' 엔드포인트 처리 중 심각한 오류 발생: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500, 
+            detail=f"기사 처리 파이프라인 실행 중 오류가 발생했습니다: {e}"
         )
 
 @app.get("/trends/korea")

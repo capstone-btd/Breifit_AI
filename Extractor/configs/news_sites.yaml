@@ -7,10 +7,10 @@ sites:
   #     IT: ["tech","science"]
   #     스포츠: "sports"
 
-  bbc:
-    base_url: "https://www.bbc.com"
-    categories:
-      세계: "news"  
+  # bbc:
+  #   base_url: "https://www.bbc.com"
+  #   categories:
+  #     세계: "news"  
   #     스포츠: "sport" 
   #     경제: "business"
   #     IT: ["innovation/technology","innovation/artificial-intelligence"]
@@ -56,15 +56,15 @@ sites:
   #     스포츠: "sports" 
   #     연예: "entertainments/enter_general"
 
-  # 중앙일보:
-  #   base_url: "https://www.joongang.co.kr"
-  #   categories:
-  #     정치: "politics" 
-      # 경제: "money" 
-      # 사회: "society" 
-      # 세계: "world" 
-      # 문화: "culture" 
-      # 스포츠: "sports" 
+  중앙일보:
+    base_url: "https://www.joongang.co.kr"
+    categories:
+      정치: "politics" 
+      경제: "money" 
+      사회: "society" 
+      세계: "world" 
+      문화: "culture" 
+      스포츠: "sports" 
 
   # 동아일보:
   #   base_url: "https://www.donga.com"
@@ -76,10 +76,10 @@ sites:
   #     문화: "news/Culture" 
   #     스포츠: "news/Sports" 
   #     연예: "news/Entertainment"
-#   한겨레:
-#     base_url: "https://www.hani.co.kr"
-#     categories:
-#       정치: "arti/politics" 
+  # 한겨레:
+  #   base_url: "https://www.hani.co.kr"
+  #   categories:
+  #     정치: "arti/politics" 
   #     경제: "arti/economy" 
   #     사회: ["arti/society","arti/area"] 
   #     세계: "arti/international" 

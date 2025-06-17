@@ -6,6 +6,7 @@ DB/
 
 # C extensions
 *.so
+models/summarization/
 
 # Distribution / packaging
 .Python
