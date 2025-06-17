@@ -182,192 +182,52 @@ class TheTimesCollector(BaseCollector):
             async with session.get(article_url, headers=self.headers, timeout=30) as response:
                 response.raise_for_status()
                 html_content = await response.text()
-        except asyncio.TimeoutError:
-            print(f"[{self.site_name.upper()}/{category.upper()}] 기사 페이지 로딩 시간 초과: {article_url}")
-            return None
-        except aiohttp.ClientError as e:
-            print(f"[{self.site_name.upper()}/{category.upper()}] 기사 페이지 로딩 중 ClientError: {e}, URL: {article_url}")
-            return None
         except Exception as e:
             print(f"[{self.site_name.upper()}/{category.upper()}] HTML 가져오는 중 알 수 없는 오류 ({article_url}): {e}")
             return None
 
         soup = BeautifulSoup(html_content, 'html.parser')
-        article_title = original_title
-        main_image_url = None
-        article_text_parts = []
-        apollo_state = None
-
-        # 1. window.__APOLLO_STATE__ 에서 JSON 데이터 추출 시도
-        try:
-            script_tag = soup.find('script', string=re.compile(r'window\.__APOLLO_STATE__\s*='))
-            if script_tag:
-                script_content = script_tag.string
-                json_str = script_content.split('window.__APOLLO_STATE__ = ', 1)[1].strip()
-                # 스크립트 태그가 끝나는 지점까지 잘라내기 (가끔 뒤에 다른 JS 코드가 붙는 경우 방지)
-                if json_str.endswith(';'): # ;로 끝나면 제거
-                    json_str = json_str[:-1]
-                
-                # JSON 객체가 여러 개 최상위에 있는 경우 (드물지만, 가끔 Apollo가 상태를 분리 저장)
-                # 대부분은 단일 객체. 예시: { ... }
-                # 만약 { ... } { ... } 형태라면 첫번째 것만 사용하거나, merge 로직 필요.
-                # 여기서는 첫번째 유효한 JSON 객체를 파싱 시도.
-                # 복잡한 케이스: window.__APOLLO_STATE__ = {...}; window.anotherVar = ...;
-                # 이 경우, 첫번째 세미콜론 전까지가 JSON이어야 함.
-                # 또는, JSON이 여러 줄로 나뉘어져 있을 수 있음.
-                # 가장 단순한 방법은 첫번째 { 부터 마지막 } 까지를 추출하는 것.
-                
-                # 첫 '{' 와 마지막 '}' 사이를 추출 (더 견고한 방법 필요할 수 있음)
-                first_brace = json_str.find('{')
-                last_brace = json_str.rfind('}')
-                if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
-                    json_to_parse = json_str[first_brace : last_brace+1]
-                    try:
-                        apollo_state = json.loads(json_to_parse)
-                        # print(f"[{self.site_name.upper()}] Successfully parsed window.__APOLLO_STATE__ for {article_url}")
-                    except json.JSONDecodeError as je:
-                        print(f"[{self.site_name.upper()}] Failed to decode JSON from APOLLO_STATE for {article_url}: {je}")
-                        # print(f"Problematic JSON string part: {json_to_parse[:500]}...") # 디버깅용
-                        apollo_state = None # 파싱 실패 시 None으로 설정
-                else:
-                    print(f"[{self.site_name.upper()}] Could not find valid JSON structure in APOLLO_STATE for {article_url}")
-
-        except Exception as ex:
-            print(f"[{self.site_name.upper()}] Error processing APOLLO_STATE for {article_url}: {ex}")
-            apollo_state = None
-
-        if apollo_state:
-            # APOLLO_STATE 내에서 Article 객체 찾기 (키 이름이 Article:GUID 형태)
-            article_data = None
-            lead_asset_data = None
-            image_key = None
-
-            for key, value in apollo_state.items():
-                if key.startswith("Article:") and isinstance(value, dict):
-                    article_data = value
-                    # 제목 추출 (우선순위: headline, shortHeadline, name)
-                    if article_data.get("headline"):
-                        article_title = str(article_data["headline"]).strip()
-                    elif article_data.get("shortHeadline"):
-                        article_title = str(article_data["shortHeadline"]).strip()
-                    elif article_data.get("name"): # 가끔 name 필드에 제목이 있을 수 있음
-                         article_title = str(article_data["name"]).strip()
-                    
-                    # 대표 이미지 키 (leadAsset)
-                    if isinstance(article_data.get("leadAsset"), dict) and article_data["leadAsset"].get("id"):
-                        image_key = article_data["leadAsset"]["id"]
-                    
-                    # 본문 내용 (paywalledContent)
-                    paywalled_content_json = article_data.get("paywalledContent")
-                    if paywalled_content_json and isinstance(paywalled_content_json, list):
-                        article_text_parts.extend(self._extract_text_from_paywalled_content(paywalled_content_json))
-                    elif isinstance(paywalled_content_json, str): # 가끔 문자열로 들어올때가 있는데, 그 안에 또 json이 있음.
-                        try:
-                            nested_paywalled_content = json.loads(paywalled_content_json)
-                            if isinstance(nested_paywalled_content, list):
-                                article_text_parts.extend(self._extract_text_from_paywalled_content(nested_paywalled_content))
-                        except json.JSONDecodeError:
-                             print(f"[{self.site_name.upper()}] Failed to decode nested paywalledContent string for {article_url}")
-
-
-                    # article_data를 찾으면 더 이상 apollo_state를 순회할 필요 없을 수 있음 (기사 하나당 하나의 Article:GUID)
-                    # 하지만 다른 정보(Image 등)는 별도로 찾아야 할 수 있으므로 일단 계속 진행
-            
-            # 이미지 URL 추출
-            if image_key and image_key in apollo_state and isinstance(apollo_state[image_key], dict):
-                image_data = apollo_state[image_key]
-                # 다양한 crop 버전 중 하나 선택 (예: 16:9 또는 원본)
-                # crop({"ratio":"16:9"}) 형태의 키 또는 직접적인 url 필드
-                if isinstance(image_data.get("url"), str): # 기본 URL 필드가 있다면 사용
-                    main_image_url = image_data["url"]
-                else: # crop된 URL 검색
-                    for img_key, img_value in image_data.items():
-                        if "crop(" in img_key and isinstance(img_value, dict) and isinstance(img_value.get("url"), str):
-                            main_image_url = img_value["url"]
-                            break # 첫번째 찾은 crop URL 사용
-            
-            # 만약 APOLLO_STATE에서 제목을 못가져왔다면 og:title 시도
-            if article_title == original_title or not article_title:
-                og_title_tag = soup.find('meta', property='og:title')
-                if og_title_tag and og_title_tag.get('content'):
-                    article_title = og_title_tag['content']
-            
-            # 만약 APOLLO_STATE에서 이미지를 못가져왔다면 og:image 시도
-            if not main_image_url:
-                og_image_tag = soup.find('meta', property='og:image')
-                if og_image_tag and og_image_tag.get('content'):
-                    main_image_url = og_image_tag['content']
-
-        # JSON 파싱 실패 또는 데이터 부족 시, 기존 BeautifulSoup 기반 로직 (fallback)
-        if not article_text_parts: # 본문을 JSON에서 전혀 못가져온 경우
-            print(f"[{self.site_name.upper()}/{category.upper()}] Failed to get text from APOLLO_STATE for {article_url}. Falling back to HTML parsing.")
-            
-            # 제목 (JSON에서 못가져왔거나, 원래 제목 그대로라면 다시 시도)
-            if article_title == original_title or not article_title:
-                h1_tag = soup.find('h1', class_="responsive__HeadlineContainer-sc-3t8ix5-3 fOpTIx")
-                if h1_tag: article_title = h1_tag.text.strip()
-                elif not article_title: # 그래도 없으면 일반 h1
-                    h1_tag = soup.find('h1')
-                    if h1_tag: article_title = h1_tag.text.strip()
-
-            # 이미지 (JSON에서 못가져왔다면 다시 시도)
-            if not main_image_url:
-                 # HTML에서 이미지 찾는 로직 (이전 버전의 것 간소화)
-                img_tag_in_article = None
-                article_main = soup.find('article', id='article-main')
-                if article_main:
-                    # figure, picture 태그 등 내부 탐색
-                    figure_tag = article_main.find('figure')
-                    if figure_tag: img_tag_in_article = figure_tag.find('img', src=True)
-                    if not img_tag_in_article:
-                        picture_tag = article_main.find('picture')
-                        if picture_tag: img_tag_in_article = picture_tag.find('img', src=True)
-                if img_tag_in_article:
-                    main_image_url = urljoin(article_url, img_tag_in_article.get('src'))
-
-
-            # 본문 컨테이너 (HTML에서 찾기)
-            # <article class="responsive__BodyContainer-sc-15gvuj2-3 iRvTiE">
-            # <div class="responsive__ArticleContent-sc-15gvuj2-8 kuowVf">
-            body_container = soup.find('article', class_="responsive__BodyContainer-sc-15gvuj2-3")
-            if not body_container:
-                body_container = soup.find('div', class_="responsive__ArticleContent-sc-15gvuj2-8")
-            
-            if body_container:
-                paragraphs = body_container.find_all('p') # 이 p태그들이 어떤 class를 가질지 불명확
-                for p_tag in paragraphs:
-                    text = p_tag.get_text(separator=' ', strip=True)
-                    # 기본적인 필터링 (광고, 구독 유도 문구 등)
-                    if text and len(text) > 30 and \
-                       not re.search(r'(subscribe to continue|log in to continue|already a subscriber|view offer|copyright|topics:)', text, re.I):
-                        article_text_parts.append(text)
         
-        if not article_text_parts and not (apollo_state and any(key.startswith("Article:") for key in apollo_state)):
-             # APOLLO_STATE도 없고, HTML에서도 본문을 못찾았으면, 아예 스크립트 없는 간단한 페이지일수도.
-             # 최후의 수단: <article id="article-main"> 내부의 모든 p 태그
-            article_main_fallback = soup.find('article', id='article-main')
-            if article_main_fallback:
-                paragraphs = article_main_fallback.find_all('p')
-                for p_tag in paragraphs:
-                    text = p_tag.get_text(separator=' ', strip=True)
-                    if text and len(text) > 30 and \
-                       not re.search(r'(subscribe to continue|log in to continue|already a subscriber|view offer|copyright|topics:)', text, re.I):
-                        article_text_parts.append(text)
+        # 새로운 간단한 추출 로직
+        # 1. 제목 추출
+        title_tag = soup.find('h1')
+        article_title = title_tag.get_text(strip=True) if title_tag else original_title
+
+        # 2. 이미지 추출 (og:image 우선, 없으면 본문 첫 이미지)
+        main_image_url = None
+        og_image_tag = soup.find('meta', property='og:image')
+        if og_image_tag and og_image_tag.get('content'):
+            main_image_url = og_image_tag['content']
+
+        # 3. 본문 추출
+        article_text_parts = []
+        # The Times는 기사 본문을 담는 div나 article 태그가 유동적일 수 있음
+        article_body = soup.select_one('div.sc-3c4f9a2-0, article[role="article"]')
+        if article_body:
+            paragraphs = article_body.find_all('p')
+            for p in paragraphs:
+                article_text_parts.append(p.get_text(strip=True))
+        
+        # 이미지를 찾지 못했고, 본문이 있다면 본문 첫 이미지라도 시도
+        if not main_image_url and article_body:
+            first_img_tag = article_body.find('img')
+            if first_img_tag and first_img_tag.get('src'):
+                main_image_url = first_img_tag.get('src')
 
 
-        if not article_text_parts:
+        article_text = "\n".join(article_text_parts)
+
+        if not article_text.strip():
             print(f"[{self.site_name.upper()}/{category.upper()}] No text found in article: {article_url} after all attempts.")
-            # return None # 본문 없으면 None 반환할 수도 있으나, 제목/이미지만이라도 수집하려면 아래 유지
-
-        full_article_text = '\n\n'.join(article_text_parts).strip()
-
+            return None
+            
         return {
-            'url': article_url,
-            'title': str(article_title).strip() if article_title else original_title.strip(),
-            'main_image_url': str(main_image_url).strip() if main_image_url else None,
-            'article_text': full_article_text,
-            'source': "the times",
-            'category': category
+            "url": article_url,
+            "title": article_title,
+            "main_image_url": main_image_url,
+            "article_text": article_text.strip(),
+            "source": self.site_name,
+            "category": category
         }
 
 # 테스트용 코드 (선택자 구현 후 주석 해제)

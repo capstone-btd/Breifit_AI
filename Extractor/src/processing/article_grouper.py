@@ -1,4 +1,88 @@
-from typing import List, Dict
+import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.cluster import DBSCAN
+from typing import List, Dict, Any, Tuple
+
+# 한국어 처리를 위한 Okt 토크나이zer 시도
+try:
+    from konlpy.tag import Okt
+    okt = Okt()
+    print("Konlpy Okt 토크나이저 로드 완료.")
+except Exception as e:
+    okt = None
+    print(f"경고: Konlpy Okt 토크나이저 초기화 실패. ({e})")
+    print("      'pip install konlpy'와 Java(JDK) 설치 및 JAVA_HOME 환경변수 설정이 필요할 수 있습니다.")
+    print("      한국어 군집화 시 기본 토크나이저로 계속 진행합니다.")
+
+def korean_tokenizer(text: str) -> List[str]:
+    """
+    Konlpy Okt를 사용한 한국어 명사 토크나이저 (Okt가 없을 경우 기본 split)
+    """
+    if okt is None:
+        return text.split()
+    return okt.nouns(text)
+
+class ArticleGrouper:
+    def __init__(self, eps=0.7, min_samples=2):
+        """
+        ArticleGrouper 초기화
+        :param eps: DBSCAN의 eps 파라미터. 두 샘플이 이웃으로 간주되기 위한 최대 거리.
+        :param min_samples: 클러스터를 구성하는 최소 샘플 수.
+        """
+        self.dbscan = DBSCAN(eps=eps, min_samples=min_samples, metric='cosine')
+        print("ArticleGrouper 초기화 완료.")
+
+    def group(self, articles: List[Dict[str, Any]]) -> Tuple[List[List[Dict[str, Any]]], List[Dict[str, Any]]]:
+        """
+        기사 리스트를 받아 그룹과 노이즈로 분류합니다.
+        :param articles: 처리할 기사 딕셔너리의 리스트
+        :return: (groups, noise) 튜플. groups는 기사 리스트의 리스트, noise는 단일 기사 리스트.
+        """
+        if len(articles) < 2:
+            print("기사가 2개 미만이라 그룹핑을 건너뛰고 모든 기사를 노이즈로 처리합니다.")
+            return [], articles
+
+        bodies = [article.get('body', article.get('title', '')) for article in articles]
+
+        # 언어 감지 (첫 번째 기사 기준)
+        is_korean = any('\uac00' <= char <= '\ud7a3' for char in bodies[0])
+        print(f"언어 감지 결과: 한국어={is_korean}")
+
+        if is_korean and okt:
+            vectorizer = TfidfVectorizer(tokenizer=korean_tokenizer, min_df=2, max_df=0.5)
+        else:
+            vectorizer = TfidfVectorizer(stop_words='english', min_df=2, max_df=0.5)
+        
+        try:
+            tfidf_matrix = vectorizer.fit_transform(bodies)
+        except ValueError as e:
+            print(f"TF-IDF 벡터화 오류: {e}. 모든 기사를 노이즈로 처리합니다.")
+            return [], articles
+
+        if tfidf_matrix.shape[0] == 0:
+            print("유의미한 단어가 없어 군집화를 건너뛰고 모든 기사를 노이즈로 처리합니다.")
+            return [], articles
+
+        clusters = self.dbscan.fit_predict(tfidf_matrix)
+
+        groups = []
+        noise = []
+        
+        # 결과를 그룹과 노이즈로 분리
+        grouped_indices = {}
+        for i, cluster_id in enumerate(clusters):
+            if cluster_id == -1:
+                noise.append(articles[i])
+            else:
+                if cluster_id not in grouped_indices:
+                    grouped_indices[cluster_id] = []
+                grouped_indices[cluster_id].append(articles[i])
+        
+        for cluster_id in sorted(grouped_indices.keys()):
+            groups.append(grouped_indices[cluster_id])
+
+        print(f"군집화 완료: {len(groups)}개 그룹, {len(noise)}개 노이즈.")
+        return groups, noise
 
 def group_articles(articles: List[Dict]) -> List[Dict]:
     """

@@ -9,8 +9,8 @@ import evaluate, argparse
 import torch
 
 MODEL_NAME = "gogamza/kobart-base-v2"
-MAX_INPUT  = 384 //GPU 메모리에 따라 설정해야함. 높을수록 정확도 증가, 기사 원문 보존
-MAX_TARGET = 256
+MAX_INPUT  = 1024 #GPU 메모리에 따라 설정해야함. 높을수록 정확도 증가, 기사 원문 보존
+MAX_TARGET = 1024
 
 def check_gpu():
     print("\n=== GPU 정보 ===")

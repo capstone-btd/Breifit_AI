@@ -48,24 +48,8 @@ def get_output_path(base_dir: str, site_name: str, category_name: str, filename:
         os.makedirs(path, exist_ok=True)
     return os.path.join(path, filename)
 
-
-# slugify 함수를 cnn_collector.py에서 여기로 옮겨올 수 있습니다.
-# 다른 곳에서도 파일명 생성 등에 필요할 수 있기 때문입니다.
-import re
-def slugify(text: Any) -> str:
+def remove_nbsp(text: str) -> str:
     """
-    입력 텍스트를 파일명이나 URL 슬러그로 사용하기 안전한 형태로 변환합니다.
-    None이나 빈 문자열이 들어오면 빈 문자열을 반환합니다.
-    숫자도 문자열로 변환하여 처리합니다.
+    Non-breaking space &nbsp; (`\xa0`) 문자를 일반 공백으로 변환하고 양쪽 공백을 제거합니다.
     """
-    if text is None: # 명시적으로 None을 확인
-        return ""
-    text_str = str(text) # 다른 타입일 경우 문자열로 변환
-    if not text_str.strip(): # 공백만 있는 문자열도 빈 문자열로 처리
-        return ""
-    # 한글, 영문, 숫자, 공백을 제외한 문자 제거. 하이픈은 유지.
-    # 오류 수정: [^\w\s-가-힣ㄱ-ㅎㅏ-ㅣ] -> [^\w가-힣ㄱ-ㅎㅏ-ㅣ\s-]
-    text_str = re.sub(r'[^\w가-힣ㄱ-ㅎㅏ-ㅣ\s-]', '', text_str.lower()) # 하이픈을 범위 지정 문자 뒤로 이동
-    # 연속되는 공백이나 하이픈을 단일 하이픈으로 변경
-    text_str = re.sub(r'[\s-]+', '-', text_str).strip('-_')
-    return text_str 
+    return text.replace("\xa0", " ").strip()

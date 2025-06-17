@@ -1,12 +1,15 @@
+from typing import List, Dict, Any, Optional
 import asyncio
 import aiohttp
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import re
 import random
+from datetime import datetime
+from slugify import slugify
 
 from .base_collector import BaseCollector
-from ..utils.file_helper import slugify
+from ..utils.browser_manager import get_browser
 
 # extract_article_details_cnn 함수는 여기에 유지
 def extract_article_details_cnn(html_content, title_from_link):
@@ -150,6 +153,15 @@ class CnnCollector(BaseCollector):
             "source": self.site_name,
             "category": category
         }
+
+    def get_file_name(self, article_title: str) -> str:
+        if article_title:
+            # 파일명으로 사용하기 위해 제목을 slugify 처리
+            slug_title = slugify(article_title)
+            if not slug_title:
+                slug_title = f"article-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+            return f"{slug_title}.json"
+        return f"article-{datetime.now().strftime('%Y%m%d%H%M%S%f')}.json"
 
 # 기존 cnn.py의 main() 함수와 파일 저장 로직은
 # run_collection.py 또는 main.py에서 처리하도록 분리됩니다.
