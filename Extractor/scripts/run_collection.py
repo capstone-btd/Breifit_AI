@@ -47,12 +47,12 @@ COLLECTOR_CLASSES = {
     'bbc': BBCCollector,
     'the_guardian': GuardianCollector,
     'the_times': TheTimesCollector,
-    '연합': YonhapCollector,
-    '조선': ChosunCollector,
-    '중앙': JoongangCollector,
-    '동아': DongaCollector,
+    '연합뉴스': YonhapCollector,
+    '조선일보': ChosunCollector,
+    '중앙일보': JoongangCollector,
+    '동아일보': DongaCollector,
     '한겨레': HankyorehCollector,
-    '경향': KyunghyangCollector
+    '경향신문': KyunghyangCollector
 }
 
 # 번역기 인스턴스 - None으로 초기화하고, 필요할 때 생성

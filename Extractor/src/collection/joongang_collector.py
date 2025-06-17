@@ -87,11 +87,17 @@ class JoongangCollector(BaseCollector):
             if not article_text.strip(): article_text = original_title
 
             main_image_url = None
-            og_image_tag = soup.find('meta', property='og:image')
-            if og_image_tag and og_image_tag.get('content'):
-                main_image_url = og_image_tag['content']
-            # TODO: og:image 없을 경우 대체 로직
-
+            # og_image_tag = soup.find('meta', property='og:image')
+            # if og_image_tag and og_image_tag.get('content'):
+            #     main_image_url = og_image_tag['content']
+            
+            if not main_image_url:
+                image_div = soup.select_one('div.image')
+                if image_div:
+                    img_tag = image_div.find('img')
+                    if img_tag and img_tag.get('data-src'):
+                        main_image_url = img_tag['data-src']
+            
             if not article_text.strip():
                 print(f"[{self.site_name.upper()}/{category.upper()}] 기사 본문 내용을 추출하지 못했습니다: {article_url}")
                 return None
