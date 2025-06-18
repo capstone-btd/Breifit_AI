@@ -16,7 +16,9 @@ except Exception as e:
 
 def korean_tokenizer(text: str) -> List[str]:
     """
-    Konlpy Okt를 사용한 한국어 명사 토크나이저 (Okt가 없을 경우 기본 split)
+    기능: Konlpy Okt 형태소 분석기를 사용하여 입력된 한국어 텍스트에서 명사만 추출하여 리스트로 반환합니다. Okt가 없으면 공백 기준으로 단어를 분리합니다.
+    input: text (토큰화할 한국어 텍스트)
+    output: 명사 토큰의 리스트
     """
     if okt is None:
         return text.split()
@@ -25,18 +27,18 @@ def korean_tokenizer(text: str) -> List[str]:
 class ArticleGrouper:
     def __init__(self, eps=0.7, min_samples=2):
         """
-        ArticleGrouper 초기화
-        :param eps: DBSCAN의 eps 파라미터. 두 샘플이 이웃으로 간주되기 위한 최대 거리.
-        :param min_samples: 클러스터를 구성하는 최소 샘플 수.
+        기능: ArticleGrouper 클래스의 인스턴스를 초기화합니다. DBSCAN 클러스터링 알고리즘을 설정합니다.
+        input: eps (DBSCAN의 eps 파라미터), min_samples (클러스터를 구성하는 최소 샘플 수)
+        output: 없음
         """
         self.dbscan = DBSCAN(eps=eps, min_samples=min_samples, metric='cosine')
         print("ArticleGrouper 초기화 완료.")
 
     def group(self, articles: List[Dict[str, Any]]) -> Tuple[List[List[Dict[str, Any]]], List[Dict[str, Any]]]:
         """
-        기사 리스트를 받아 그룹과 노이즈로 분류합니다.
-        :param articles: 처리할 기사 딕셔너리의 리스트
-        :return: (groups, noise) 튜플. groups는 기사 리스트의 리스트, noise는 단일 기사 리스트.
+        기능: TF-IDF와 DBSCAN 알고리즘을 사용하여 기사 리스트를 내용이 유사한 그룹과 그렇지 않은 단일 기사(노이즈)로 분류
+        input: articles (처리할 기사 딕셔너리의 리스트)
+        output: (groups, noise) 튜플. groups는 유사 기사 묶음(리스트의 리스트)이고, noise는 그룹에 속하지 않는 단일 기사들의 리스트
         """
         if len(articles) < 2:
             print("기사가 2개 미만이라 그룹핑을 건너뛰고 모든 기사를 노이즈로 처리합니다.")
@@ -127,7 +129,7 @@ def group_articles(articles: List[Dict]) -> List[Dict]:
         {
             "group_id": "temp_group_01",
             "representative_title": articles[0].get("title", "N/A") if articles else "N/A",
-            "keywords": استخراج_키워드_예시(articles[0].get("article_text", "") if articles else ""), # 임시 키워드 추출 함수
+            "keywords": extract_keywords_example(articles[0].get("article_text", "") if articles else ""), # 임시 키워드 추출 함수
             "articles": articles # 모든 기사를 이 그룹에 포함
         }
     ]
@@ -135,7 +137,7 @@ def group_articles(articles: List[Dict]) -> List[Dict]:
     return grouped_data
 
 # 임시 키워드 추출 함수 예시 (실제로는 더 정교한 NLP 라이브러리 사용)
-def استخراج_키워드_예시(text: str, num_keywords: int = 5) -> List[str]:
+def extract_keywords_example(text: str, num_keywords: int = 5) -> List[str]:
     if not text:
         return []
     # 간단히 공백으로 단어 분리 후 빈도수 높은 단어 (불용어 처리 등 필요)

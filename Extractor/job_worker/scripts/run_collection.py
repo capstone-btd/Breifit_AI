@@ -60,7 +60,11 @@ COLLECTOR_CLASSES = {
 translator: NllbTranslator = None
 
 def get_translator() -> NllbTranslator:
-    """번역기 인스턴스를 가져온다 (없으면 새로 생성). 싱글턴 패턴."""
+    """
+    기능: 번역기(NllbTranslator)의 싱글턴 인스턴스를 반환합니다. 인스턴스가 없으면 새로 생성하고, 이미 있으면 기존 인스턴스를 반환합니다.
+    input: 없음
+    output: NllbTranslator 인스턴스 또는 초기화 실패 시 None
+    """
     global translator
     if translator is None:
         print("[Translator] 번역기 인스턴스가 없으므로 새로 생성합니다...")
@@ -70,11 +74,15 @@ def get_translator() -> NllbTranslator:
             print(f"[Translator] 번역기 로드 완료: {model_info['model_name']}")
         except Exception as e:
             print(f"[Translator] 번역기 초기화 실패: {e}")
-            translator = None # 실패 시 다시 None으로 설정
+            translator = None
     return translator
 
 def get_collector_for_site(site_name: str, site_config: dict) -> Any:
-    """사이트 이름에 해당하는 Collector 인스턴스 생성"""
+    """
+    기능: 사이트 이름에 해당하는 Collector 클래스의 인스턴스를 생성하여 반환합니다.
+    input: site_name (언론사 이름), site_config (해당 언론사의 설정 딕셔너리)
+    output: Collector 인스턴스 또는 None
+    """
     collector_class = COLLECTOR_CLASSES.get(site_name.lower())
     if not collector_class:
         print(f"경고: '{site_name}'에 대한 Collector를 찾을 수 없습니다.")
@@ -82,7 +90,11 @@ def get_collector_for_site(site_name: str, site_config: dict) -> Any:
     return collector_class()
 
 def load_config(config_path: str) -> Dict:
-    """설정 파일 로드"""
+    """
+    기능: YAML 설정 파일을 로드하여 딕셔너리로 반환합니다.
+    input: config_path (설정 파일의 경로)
+    output: 설정 내용이 담긴 딕셔너리
+    """
     try:
         with open(config_path, 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f)
@@ -93,14 +105,21 @@ def load_config(config_path: str) -> Dict:
         return {}
 
 def get_output_path(base_dir: str, category_name: str, filename: str, collection_time_str: str) -> str:
-    """기사 저장 경로 생성 (카테고리 폴더에 바로 저장)"""
-    # 저장 경로를 collected_articles 아래 시간별 폴더로 변경
+    """
+    기능: 수집된 기사를 저장할 파일 경로를 생성합니다.
+    input: base_dir (저장 기본 경로), category_name (기사 카테고리), filename (저장될 파일명), collection_time_str (수집 시간 문자열)
+    output: 최종 저장 파일 경로 문자열
+    """
     path = os.path.join(base_dir, collection_time_str, category_name)
     os.makedirs(path, exist_ok=True)
     return os.path.join(path, filename)
 
 async def save_json_async(data: dict, file_path: str) -> None:
-    """기사 데이터를 JSON 파일로 비동기 저장"""
+    """
+    기능: 딕셔너리 데이터를 JSON 파일로 비동기적으로 저장합니다.
+    input: data (저장할 딕셔너리), file_path (저장할 파일 경로)
+    output: 없음
+    """
     try:
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, 'w', encoding='utf-8') as f:
@@ -110,7 +129,11 @@ async def save_json_async(data: dict, file_path: str) -> None:
         raise
 
 async def download_and_encode_image(session: aiohttp.ClientSession, url: str, retries: int = 2, delay: int = 2) -> str | None:
-    """URL에서 이미지를 비동기적으로 다운로드하고 Base64로 인코딩합니다. (재시도 로직 포함)"""
+    """
+    기능: URL에서 이미지를 비동기적으로 다운로드하고 Base64로 인코딩합니다. 재시도 로직을 포함합니다.
+    input: session (aiohttp.ClientSession), url (이미지 URL), retries (재시도 횟수), delay (재시도 간 지연 시간)
+    output: Base64로 인코딩된 이미지 문자열 또는 실패 시 None
+    """
     if not url or not url.startswith('http'):
         return None
     
@@ -120,7 +143,7 @@ async def download_and_encode_image(session: aiohttp.ClientSession, url: str, re
     
     for attempt in range(retries + 1):
         try:
-            async with session.get(url, timeout=20, headers=headers) as response: # 타임아웃 20초로 증가
+            async with session.get(url, timeout=20, headers=headers) as response:
                 response.raise_for_status()
                 image_bytes = await response.read()
                 return base64.b64encode(image_bytes).decode('utf-8')
@@ -130,12 +153,16 @@ async def download_and_encode_image(session: aiohttp.ClientSession, url: str, re
             print(f"  - 경고: 이미지 다운로드 중 오류 발생 (시도 {attempt + 1}/{retries + 1}): {e}, URL: {url}")
         
         if attempt < retries:
-            await asyncio.sleep(delay) # 재시도 전 잠시 대기
+            await asyncio.sleep(delay)
             
     return None
 
 async def preprocess_article(article: dict, press_company: str) -> dict:
-    """기사 데이터 전처리 (번역 포함)"""
+    """
+    기능: 단일 기사 데이터를 전처리합니다. 영어 기사의 경우 번역을 수행하고, 불필요한 텍스트를 정리하며, 데이터 형식을 통일합니다.
+    input: article (전처리할 기사 딕셔너리), press_company (언론사 이름)
+    output: 전처리된 기사 딕셔너리 또는 처리할 수 없는 경우 None
+    """
     if not article or not isinstance(article, dict):
         return None
 
@@ -143,24 +170,19 @@ async def preprocess_article(article: dict, press_company: str) -> dict:
         print(f"경고: 필수 정보(제목 또는 URL)가 없는 기사가 있어 건너뜁니다: {article}")
         return None
 
-    # press_company를 설정 파일의 키(예: '중앙')로 설정
     article['source'] = press_company
 
-    # Base64 인코딩 로직이 사라졌으므로, 이미지 URL은 그대로 유지됩니다.
-    # main_image_url 키를 image_url로 변경하여 DB 스키마와 맞춥니다.
     if 'main_image_url' in article:
         article['image_url'] = article.pop('main_image_url')
 
     original_article_text = article.get('article_text', '')
     if original_article_text:
         processed_text = preprocess_text_simple(original_article_text)
-        # 키 이름을 'body'로 변경
         article['body'] = processed_text
         print(f"  - '{article['title'][:30]}' 기사 전처리 완료.")
     else:
         article['body'] = ""
     
-    # 더 이상 사용되지 않는 'article_text' 키 삭제
     if 'article_text' in article:
         del article['article_text']
 
@@ -168,7 +190,6 @@ async def preprocess_article(article: dict, press_company: str) -> dict:
         print(f"  - 경고: 최종 기사 내용이 30자 미만이라 저장하지 않습니다. (제목: '{article['title'][:30]}...')")
         return None
 
-    # 번역 처리 (영어 기사인 경우)
     current_translator = get_translator()
     if current_translator and article.get('body'):
         english_chars = sum(1 for c in article['body'] if c.isascii() and c.isalpha())
@@ -177,11 +198,9 @@ async def preprocess_article(article: dict, press_company: str) -> dict:
         if total_chars > 0 and english_chars / total_chars > 0.7:
             print(f"  - 영어 기사로 판단되어 번역을 시작합니다: '{article.get('title', '제목 없음')[:30]}...'")
             try:
-                # 기사 본문 번역
                 translated_text = current_translator.translate(article['body'])
                 article['body'] = translated_text
                 
-                # 제목 번역
                 translated_title = current_translator.translate(article['title'])
                 article['title'] = translated_title
                 print(f"  - 번역 완료: '{article['title'][:30]}...'")
@@ -193,8 +212,9 @@ async def preprocess_article(article: dict, press_company: str) -> dict:
 
 async def run_collection_for_site(site_name: str, site_config: dict, api_call_time: datetime, session: aiohttp.ClientSession) -> int:
     """
-    특정 언론사의 모든 카테고리에서 기사 수집.
-    성공적으로 로컬에 파일로 저장된 기사의 수를 반환합니다.
+    기능: 특정 언론사의 모든 카테고리에서 기사를 수집하고 전처리하여 로컬에 JSON 파일로 저장합니다.
+    input: site_name (언론사 이름), site_config (언론사 설정), api_call_time (API 호출 시간), session (aiohttp 클라이언트 세션)
+    output: 성공적으로 로컬에 저장된 기사의 수
     """
     print(f"\n[run_collection] {site_name.upper()} 수집 시작...")
     
@@ -246,9 +266,8 @@ async def run_collection_for_site(site_name: str, site_config: dict, api_call_ti
                 if processed_article:
                     processed_article['created_at'] = api_call_time.isoformat()
                     
-                    # 파일명 생성 (slugify 사용)
                     safe_filename = slugify(processed_article['title'], max_length=50, allow_unicode=True)
-                    if not safe_filename: # 제목이 비거나 특수문자로만 이루어진 경우
+                    if not safe_filename:
                         safe_filename = slugify(processed_article.get('source', 'untitled'), allow_unicode=True) + f"_{datetime.now().timestamp()}"
                     
                     filename = f"{safe_filename}.json"
@@ -275,8 +294,9 @@ async def run_collection_for_site(site_name: str, site_config: dict, api_call_ti
 
 async def run_collection_pipeline() -> int:
     """
-    전체 뉴스 수집 파이프라인 실행.
-    성공적으로 로컬에 저장된 총 기사 수를 반환합니다.
+    기능: 설정 파일에 명시된 모든 활성화된 언론사를 대상으로 전체 뉴스 수집 파이프라인을 실행합니다.
+    input: 없음
+    output: 성공적으로 로컬에 저장된 총 기사의 수
     """
     logger = logging.getLogger(__name__)
     logger.info("전체 뉴스 수집 파이프라인 시작 (로컬 파일 저장 방식)...")
@@ -289,18 +309,15 @@ async def run_collection_pipeline() -> int:
     api_call_time = datetime.now()
     total_files_saved = 0
     
-    # aiohttp 클라이언트 세션 생성
     async with aiohttp.ClientSession() as session:
         site_tasks = []
         
-        # 'sites' 키 아래의 언론사 목록을 순회하도록 수정
         sites_to_crawl = config.get('sites', {})
         if not sites_to_crawl:
             logger.warning("설정 파일에 'sites' 목록이 비어있거나 없습니다.")
             return 0
             
         for site_name, site_config in sites_to_crawl.items():
-            # enabled 플래그가 없으므로, 설정 파일에 있는 모든 사이트를 대상으로 실행
             task = run_collection_for_site(site_name, site_config, api_call_time, session)
             site_tasks.append(task)
         
@@ -316,17 +333,19 @@ async def run_collection_pipeline() -> int:
     logger.info(f"전체 뉴스 수집 파이프라인 완료. 총 {total_files_saved}개의 기사가 로컬에 저장되었습니다.")
     return total_files_saved
 
-# 스크립트 직접 실행을 위한 main 함수
 async def main():
+    """
+    기능: 스크립트가 직접 실행될 때 뉴스 수집 파이프라인을 실행하기 위한 메인 함수입니다.
+    input: 없음
+    output: 없음
+    """
     setup_logger()
     
-    # DB 세션을 생성하고 전달하는 로직 제거
     print("스크립트 직접 실행: 전체 뉴스 수집 파이프라인 (로컬 저장) 시작...")
     saved_count = await run_collection_pipeline()
     print(f"\n스크립트 실행 완료. 총 {saved_count}개의 기사가 로컬에 저장되었습니다.")
 
 if __name__ == "__main__":
-    # Windows에서 asyncio.run() 사용 시 발생하는 이벤트 루프 에러 해결
     if sys.platform == "win32" and sys.version_info >= (3, 8):
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     

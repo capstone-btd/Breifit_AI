@@ -24,7 +24,11 @@ PROCESSED_TIME_FILE = os.path.join(COLLECTED_ARTICLES_BASE_DIR, 'last_processed_
 SUMMARIZATION_MODEL_PATH = os.path.join(PROJECT_ROOT, 'models', 'summarization')
 
 def get_last_processed_time() -> datetime | None:
-    """마지막으로 처리한 시간을 파일에서 읽어옵니다."""
+    """
+    기능: 마지막으로 기사 처리를 실행한 시간을 파일에서 읽어옵니다. 이 시간은 새로운 기사만 처리하기 위한 기준점이 됩니다.
+    input: 없음
+    output: 마지막 처리 시간을 나타내는 datetime 객체 또는 파일이 없을 경우 None
+    """
     if not os.path.exists(PROCESSED_TIME_FILE):
         return None
     with open(PROCESSED_TIME_FILE, 'r') as f:
@@ -35,14 +39,20 @@ def get_last_processed_time() -> datetime | None:
             return None
 
 def set_last_processed_time(process_time: datetime):
-    """현재 처리 시간을 파일에 기록합니다."""
+    """
+    기능: 기사 처리를 완료한 현재 시간을 파일에 기록합니다.
+    input: process_time (현재 처리 시간의 datetime 객체)
+    output: 없음
+    """
     os.makedirs(os.path.dirname(PROCESSED_TIME_FILE), exist_ok=True)
     with open(PROCESSED_TIME_FILE, 'w') as f:
         f.write(process_time.isoformat())
 
 def load_new_articles() -> List[Dict[str, Any]]:
     """
-    마지막 처리 시간 이후에 수집된 모든 새 기사들을 불러옵니다.
+    기능: 마지막으로 처리한 시간 이후에 수집된 모든 새로운 기사 파일(JSON)을 불러옵니다.
+    input: 없음
+    output: 새로운 기사 데이터 딕셔너리가 담긴 리스트
     """
     last_processed_time = get_last_processed_time()
     all_new_articles = []
@@ -69,7 +79,9 @@ def load_new_articles() -> List[Dict[str, Any]]:
 
 def run_processing_pipeline():
     """
-    수집된 기사를 그룹핑, 요약하고 DB에 저장하는 전체 파이프라인.
+    기능: 전체 기사 처리 파이프라인을 실행합니다. 로컬의 새 기사를 로드하여 카테고리별로 그룹핑하고, 요약한 뒤, 최종 결과를 데이터베이스에 저장합니다.
+    input: 없음
+    output: 없음
     """
     logger = setup_logger()
     logger.info("기사 처리 파이프라인 시작...")
@@ -104,36 +116,32 @@ def run_processing_pipeline():
 
     db = SessionLocal()
     try:
-        # 3. 요약기 초기화
         summarizer = Summarizer(model_path=SUMMARIZATION_MODEL_PATH)
 
-        # 4. 단일 기사(Noise) 처리
-        for article_data in all_noise:
-            title = article_data.get('title', '제목 없음')
-            logger.info(f"단일 기사 처리 중: {title[:30]}...")
+        # # 단일 기사 처리하는 부분
+        # for article_data in all_noise:
+        #     title = article_data.get('title', '제목 없음')
+        #     logger.info(f"단일 기사 처리 중: {title[:30]}...")
             
-            # 4-1. 본문 요약
-            original_body = article_data.get('body', '')
-            summarized_body = summarizer.summarize(original_body)
-            if not summarized_body:
-                logger.warning(f"  - 요약문 생성 실패. 원본 본문을 사용합니다.")
-                summarized_body = original_body[:500] # 원본 사용 시 길이 제한
+        #     original_body = article_data.get('body', '')
+        #     summarized_body = summarizer.summarize(original_body)
+        #     if not summarized_body:
+        #         logger.warning(f"  - 요약문 생성 실패. 원본 본문을 사용합니다.")
+        #         summarized_body = original_body[:500] # 원본 사용 시 길이 제한
             
-            # 4-2. DB 저장을 위한 데이터 준비
-            final_article_data = {
-                'title': title,
-                'body': summarized_body,
-                'category': article_data.get('category', '기타'), # 카테고리 없으면 '기타'
-                'image_url': article_data.get('image_url', ''), # 이미지 없으면 빈 문자열
-                'source_title': title,
-                'source_url': article_data.get('url'),
-                'press_company': article_data.get('source')
-            }
+        #     final_article_data = {
+        #         'title': title,
+        #         'body': summarized_body,
+        #         'category': article_data.get('category', '기타'),
+        #         'image_url': article_data.get('image_url', ''),
+        #         'source_title': title,
+        #         'source_url': article_data.get('url'),
+        #         'press_company': article_data.get('source')
+        #     }
             
-            # 4-3. DB 저장
-            crud.create_single_article(db=db, article_data=final_article_data)
+        #     crud.create_single_article(db=db, article_data=final_article_data)
 
-        # 5. 그룹 기사(Group) 처리
+        # 여러 기사를 그룹핑하여 처리하는 부분
         for group in all_groups:
             if not group: continue # 빈 그룹은 건너뛰기
             logger.info(f"{len(group)}개의 기사를 가진 그룹 처리 중...")

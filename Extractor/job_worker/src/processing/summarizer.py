@@ -2,6 +2,7 @@ from typing import List, Dict, Tuple
 import os
 import torch
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+import re
 
 def summarize_and_extract_keywords(grouped_articles_data: List[Dict]) -> List[Dict]:
     """
@@ -68,9 +69,9 @@ def summarize_and_extract_keywords(grouped_articles_data: List[Dict]) -> List[Di
 class Summarizer:
     def __init__(self, model_path: str = "models/summarization", device: str = None):
         """
-        요약 모델과 토크나이저를 로드합니다.
-        :param model_path: KoBART 모델 및 토크나이저가 저장된 경로
-        :param device: 모델을 실행할 장치 ('cuda', 'cpu' 등). None일 경우 자동 감지.
+        기능: 요약 모델과 토크나이저를 메모리에 로드하고 초기화합니다.
+        input: model_path (모델 파일들이 저장된 경로), device (모델을 실행할 장치, e.g., 'cuda' or 'cpu')
+        output: 없음
         """
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"모델 경로를 찾을 수 없습니다: {model_path}")
@@ -86,25 +87,38 @@ class Summarizer:
 
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         self.model = AutoModelForSeq2SeqLM.from_pretrained(model_path).to(self.device)
+        self.max_input_length = 1024
+        
+        weird_endings = list(set([
+            '했다', '강조했다', '습니다', '했습니다', '덧붙였다', '한다', 
+            '설명했다', '분석했다', '전해졌다', '상황이다', '전망이다', 
+            '됩니다', '나타났다', '있습니다', '된다', '겁니다', '됐다', 
+            '적이다', '계획이다', '해왔다', '하다', '증가했다', '것이다', 
+            '예정이다', '방침이다', '풀이된다', '밝혔다', '말했다', '전했다'
+        ]))
+        self.ending_pattern = re.compile(r"(\s*(" + "|".join(re.escape(e) for e in weird_endings) + r")\.)+\s*$")
+        
         print("요약 모델 로딩 완료.")
 
-    def summarize(self, text: str, max_length: int = 128, num_beams: int = 4, length_penalty: float = 1.2) -> str:
+    def _clean_summary_endings(self, summary: str) -> str:
         """
-        주어진 텍스트를 요약합니다.
-        :param text: 요약할 원본 텍스트
-        :param max_length: 생성될 요약문의 최대 길이
-        :param num_beams: 빔 서치(beam search)에서 사용할 빔의 수
-        :param length_penalty: 길이가 긴 요약을 생성하도록 하는 페널티. 1.0보다 크면 긴 문장, 작으면 짧은 문장 선호.
-        :return: 생성된 요약문
+        기능: 요약문 끝에 반복적으로 나타나는 부자연스러운 동사 어미를 제거합니다.
+        input: summary (원본 요약문)
+        output: 어미가 제거된 요약문
         """
-        if not text:
-            return ""
-            
+        return self.ending_pattern.sub("", summary).strip()
+
+    def _summarize_internal(self, text: str, max_length: int, num_beams: int, length_penalty: float) -> str:
+        """
+        기능: 입력된 텍스트에 대해 실제 요약 연산을 수행하는 내부 함수입니다.
+        input: text (요약할 텍스트), max_length (최대 생성 길이), num_beams (빔 서치 너비), length_penalty (길이 페널티)
+        output: 요약된 텍스트 문자열
+        """
         inputs = self.tokenizer(
             text,
             return_tensors="pt",
             truncation=True,
-            max_length=1024  # 모델 입력의 최대 길이
+            max_length=self.max_input_length
         ).to(self.device)
 
         summary_ids = self.model.generate(
@@ -112,20 +126,63 @@ class Summarizer:
             max_length=max_length,
             num_beams=num_beams,
             length_penalty=length_penalty,
-            no_repeat_ngram_size=2, # 반복 방지를 위해 2-gram 반복 없도록 설정
+            no_repeat_ngram_size=2,
             early_stopping=True
         )
+        summary_text = self.tokenizer.decode(summary_ids[0], skip_special_tokens=True).strip()
+        cleaned_summary = self._clean_summary_endings(summary_text)
+        return cleaned_summary
 
-        summary = self.tokenizer.decode(summary_ids[0], skip_special_tokens=True)
-        return summary.strip()
+    def summarize(self, text: str, max_length: int = 256, num_beams: int = 5, length_penalty: float = 1.2) -> str:
+        """
+        기능: 주어진 텍스트를 요약합니다. 텍스트가 모델의 최대 입력 길이를 초과할 경우, '요약의 요약' 방식을 사용하여 정보 손실 없이 처리합니다.
+        input: text (요약할 원본 텍스트), max_length (최종 요약문 최대 길이), num_beams (빔 서치 너비), length_penalty (길이 페널티)
+        output: 생성된 최종 요약문
+        """
+        if not text:
+            return ""
+
+        input_token_ids = self.tokenizer(text, truncation=False, return_tensors="pt")["input_ids"][0]
+        
+        if len(input_token_ids) <= self.max_input_length:
+            return self._summarize_internal(text, max_length, num_beams, length_penalty)
+
+        print(f"  - 입력 텍스트가 너무 길어({len(input_token_ids)} 토큰) '요약의 요약' 방식을 사용합니다.")
+        
+        paragraphs = text.split("\n\n")
+        chunks = []
+        current_chunk_tokens = []
+
+        for p in paragraphs:
+            paragraph_tokens = self.tokenizer(p, truncation=False)["input_ids"]
+            
+            if len(current_chunk_tokens) + len(paragraph_tokens) <= self.max_input_length:
+                current_chunk_tokens.extend(paragraph_tokens)
+            else:
+                if current_chunk_tokens:
+                    chunks.append(self.tokenizer.decode(current_chunk_tokens, skip_special_tokens=True))
+                current_chunk_tokens = paragraph_tokens
+        
+        if current_chunk_tokens:
+            chunks.append(self.tokenizer.decode(current_chunk_tokens, skip_special_tokens=True))
+
+        partial_summaries = []
+        for i, chunk in enumerate(chunks):
+            print(f"    - 청크 {i+1}/{len(chunks)} 요약 중...")
+            partial_summary = self._summarize_internal(chunk, max_length=512, num_beams=num_beams, length_penalty=length_penalty)
+            partial_summaries.append(partial_summary)
+            
+        stitched_summary = "\n".join(partial_summaries)
+        print(f"    - 부분 요약들을 합쳐 최종 요약 생성 중...")
+        final_summary = self._summarize_internal(stitched_summary, max_length=max_length, num_beams=num_beams, length_penalty=length_penalty)
+
+        return final_summary
 
     def summarize_batch(self, texts: List[str], batch_size: int = 4, **kwargs) -> List[str]:
         """
-        여러 텍스트를 배치 단위로 요약합니다.
-        :param texts: 요약할 텍스트 리스트
-        :param batch_size: 한 번에 처리할 배치 크기
-        :param kwargs: summarize 함수에 전달될 추가 인자
-        :return: 요약된 텍스트 리스트
+        기능: 여러 텍스트를 배치 단위로 요약합니다. (주의: 이 함수는 긴 텍스트를 자동으로 잘라냅니다.)
+        input: texts (요약할 텍스트 리스트), batch_size (한 번에 처리할 배치 크기), kwargs (summarize 함수에 전달될 추가 인자)
+        output: 요약된 텍스트 리스트
         """
         summaries = []
         for i in range(0, len(texts), batch_size):

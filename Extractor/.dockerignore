@@ -1,4 +1,4 @@
-# Git / version control
+# Git
 .git
 .gitignore
 
@@ -6,23 +6,37 @@
 .dockerignore
 Dockerfile
 
-# IDE / Editor specific
-.idea
-.vscode
-*.swp
-
-# Python cache
+# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-
-# Python virtual environment
-.env
-.venv
+.Python
 env/
 venv/
-ENV/
+.venv/
+
+# 수집 데이터 및 로컬 DB
+data/
+DB/local_database.db
+
+# IDE/에디터 설정
+.idea/
+.vscode/
+
+# 운영체제 파일
+.DS_Store
+Thumbs.db
+
+# 테스트 및 임시 파일
+notebooks(테스트용)/
+*.zip
+image.png
+Extractor_Experiments/
+Extractorcopy/
+Kobart/
+Dataset/
+tests/
 
 # Test / Coverage artifacts
 .pytest_cache/
