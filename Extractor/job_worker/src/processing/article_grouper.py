@@ -51,7 +51,7 @@ class ArticleGrouper:
         print(f"언어 감지 결과: 한국어={is_korean}")
 
         if is_korean and okt:
-            vectorizer = TfidfVectorizer(tokenizer=korean_tokenizer, min_df=2, max_df=0.5)
+            vectorizer = TfidfVectorizer(tokenizer=korean_tokenizer, token_pattern=None, min_df=2, max_df=0.5)
         else:
             vectorizer = TfidfVectorizer(stop_words='english', min_df=2, max_df=0.5)
         

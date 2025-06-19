@@ -10,17 +10,19 @@ from typing import Dict, Any
 from slugify import slugify
 import aiohttp
 import base64
+from google.cloud import storage
+import io
 
 # DB 연동을 위한 모듈 import - 현재 단계에서는 사용하지 않으므로 주석 처리
 # from sqlalchemy.orm import Session
 # from DB.database import SessionLocal
 # from DB import crud, models
 
-# 프로젝트 루트 경로
-current_dir = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(current_dir)
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+# 프로젝트 루트 경로 - 이제 run_full_pipeline.py에서 관리하므로 제거합니다.
+# current_dir = os.path.dirname(os.path.abspath(__file__))
+# PROJECT_ROOT = os.path.dirname(current_dir)
+# if PROJECT_ROOT not in sys.path:
+#     sys.path.insert(0, PROJECT_ROOT)
 
 # Collector 클래스 import
 from src.collection.cnn_collector import CnnCollector
@@ -37,10 +39,15 @@ from src.utils.text_processing import preprocess_text_simple
 from src.utils.logger import setup_logger
 from models.translation.nllb_translator import NllbTranslator
 
-# 설정 파일 경로
+# 설정 파일 및 데이터 디렉토리 경로 - 프로젝트 루트를 기준으로 재설정
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE_PATH = os.path.join(PROJECT_ROOT, 'configs', 'news_sites.yaml')
-# 수집된 기사를 저장할 기본 디렉토리
 COLLECTED_ARTICLES_BASE_DIR = os.path.join(PROJECT_ROOT, 'data', 'collected_articles')
+
+# GCS 설정
+GCS_BUCKET_NAME = "betodi-bucket"  # 실제 GCS 버킷 이름
+storage_client = storage.Client()
+bucket = storage_client.bucket(GCS_BUCKET_NAME)
 
 # Collector 클래스 매핑
 COLLECTOR_CLASSES = {
@@ -210,11 +217,28 @@ async def preprocess_article(article: dict, press_company: str) -> dict:
 
     return article
 
-async def run_collection_for_site(site_name: str, site_config: dict, api_call_time: datetime, session: aiohttp.ClientSession) -> int:
+async def upload_json_to_gcs_async(data: dict, gcs_path: str):
     """
-    기능: 특정 언론사의 모든 카테고리에서 기사를 수집하고 전처리하여 로컬에 JSON 파일로 저장합니다.
-    input: site_name (언론사 이름), site_config (언론사 설정), api_call_time (API 호출 시간), session (aiohttp 클라이언트 세션)
-    output: 성공적으로 로컬에 저장된 기사의 수
+    기능: 딕셔너리 데이터를 JSON으로 변환하여 GCS에 비동기적으로 업로드합니다.
+    input: data (저장할 딕셔너리), gcs_path (GCS 내 저장 경로)
+    output: 없음
+    """
+    try:
+        json_data = json.dumps(data, ensure_ascii=False, indent=2)
+        blob = bucket.blob(gcs_path)
+        
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, lambda: blob.upload_from_string(json_data, content_type='application/json'))
+
+    except Exception as e:
+        print(f"GCS 업로드 실패 ({gcs_path}): {e}")
+        raise
+
+async def run_collection_for_site(site_name: str, site_config: dict, collection_time_str: str, session: aiohttp.ClientSession) -> int:
+    """
+    기능: 특정 언론사의 모든 카테고리에서 기사를 수집하고 전처리하여 GCS에 JSON 파일로 저장합니다.
+    input: site_name (언론사 이름), site_config (언론사 설정), collection_time_str (수집 시간 문자열), session (aiohttp 클라이언트 세션)
+    output: 성공적으로 GCS에 저장된 기사의 수
     """
     print(f"\n[run_collection] {site_name.upper()} 수집 시작...")
     
@@ -241,7 +265,6 @@ async def run_collection_for_site(site_name: str, site_config: dict, api_call_ti
     category_results = await asyncio.gather(*category_tasks, return_exceptions=True)
     
     files_saved_count = 0
-    collection_time_str = api_call_time.strftime("%Y%m%d_%H%M%S")
 
     for result in category_results:
         if isinstance(result, Exception):
@@ -253,85 +276,77 @@ async def run_collection_for_site(site_name: str, site_config: dict, api_call_ti
             continue
 
         category_display_name = articles_data[0].get('category', 'etc') if articles_data else 'etc'
-        print(f"카테고리 '{category_display_name}' ({site_name})에서 {len(articles_data)}개 기사 수집 완료. 전처리 및 로컬 저장 시작...")
+        print(f"카테고리 '{category_display_name}' ({site_name})에서 {len(articles_data)}개 기사 수집 완료. 전처리 및 GCS 저장 시작...")
         
         async def process_and_save_to_json(article_data: dict) -> bool:
-            """단일 기사를 전처리하고 JSON 파일로 저장. 성공 시 True 반환"""
-            if not article_data or not isinstance(article_data, dict):
+            """
+            기능: 단일 기사 데이터를 전처리하고 GCS에 JSON으로 저장합니다.
+            output: 성공 시 True, 실패 시 False
+            """
+            processed_article = await preprocess_article(article_data, site_name)
+            if not processed_article:
                 return False
 
-            title = article_data.get('title', '제목 없음')
+            filename = f"{slugify(processed_article.get('title', 'untitled'))}.json"
+            category_name = processed_article.get('category', 'etc')
+            
+            # GCS 저장 경로 생성
+            gcs_path = f"collected_articles/{collection_time_str}/{category_name}/{filename}"
+
             try:
-                processed_article = await preprocess_article(article_data, site_name)
-                if processed_article:
-                    processed_article['created_at'] = api_call_time.isoformat()
-                    
-                    safe_filename = slugify(processed_article['title'], max_length=50, allow_unicode=True)
-                    if not safe_filename:
-                        safe_filename = slugify(processed_article.get('source', 'untitled'), allow_unicode=True) + f"_{datetime.now().timestamp()}"
-                    
-                    filename = f"{safe_filename}.json"
-                    output_path = get_output_path(
-                        base_dir=COLLECTED_ARTICLES_BASE_DIR,
-                        category_name=category_display_name,
-                        filename=filename,
-                        collection_time_str=collection_time_str
-                    )
-                    
-                    await save_json_async(processed_article, output_path)
-                    print(f"  - 로컬 저장 완료: {output_path}")
-                    return True
+                await upload_json_to_gcs_async(processed_article, gcs_path)
+                return True
             except Exception as e:
-                print(f"  - 에러: '{title[:30]}...' 기사 처리/저장 중 오류 발생: {e}")
-            return False
+                # 에러는 upload 함수에서 이미 출력됨
+                return False
 
         save_tasks = [process_and_save_to_json(article) for article in articles_data]
         save_results = await asyncio.gather(*save_tasks)
         files_saved_count += sum(1 for r in save_results if r)
 
-    print(f"[{site_name.upper()}] 총 {files_saved_count}개의 기사 로컬 저장 완료.")
+    print(f"[{site_name.upper()}] 총 {files_saved_count}개의 기사 GCS 저장 완료.")
     return files_saved_count
 
-async def run_collection_pipeline() -> int:
+async def run_collection_pipeline() -> str | None:
     """
-    기능: 설정 파일에 명시된 모든 활성화된 언론사를 대상으로 전체 뉴스 수집 파이프라인을 실행합니다.
-    input: 없음
-    output: 성공적으로 로컬에 저장된 총 기사의 수
+    기능: 설정 파일에 명시된 모든 언론사의 기사를 수집/처리하고 GCS에 저장합니다.
+    output: 성공적으로 기사가 저장된 경우, GCS 내의 최상위 폴더 경로. 저장된 기사가 없으면 None.
     """
-    logger = logging.getLogger(__name__)
-    logger.info("전체 뉴스 수집 파이프라인 시작 (로컬 파일 저장 방식)...")
-    
+    logger = setup_logger()
+    logger.info("======= Full Data Collection Job Succeeded =======")
+
     config = load_config(CONFIG_FILE_PATH)
     if not config:
-        logger.error("설정 파일 로딩 실패. 파이프라인을 중단합니다.")
-        return 0
+        logger.error("설정 파일을 찾을 수 없거나 내용이 비어있어 수집을 중단합니다.")
+        return None
 
-    api_call_time = datetime.now()
-    total_files_saved = 0
-    
+    # 모든 사이트 수집 작업은 동일한 시간대 폴더에 저장됩니다.
+    collection_time = datetime.now()
+    collection_time_str = collection_time.strftime("%Y%m%d_%H%M%S")
+    gcs_output_prefix = f"collected_articles/{collection_time_str}"
+
+    # 비동기 HTTP 세션 생성
     async with aiohttp.ClientSession() as session:
-        site_tasks = []
+        site_tasks = [
+            run_collection_for_site(site_name, site_config, collection_time_str, session)
+            for site_name, site_config in config.get('sites', {}).items()
+        ]
         
-        sites_to_crawl = config.get('sites', {})
-        if not sites_to_crawl:
-            logger.warning("설정 파일에 'sites' 목록이 비어있거나 없습니다.")
-            return 0
-            
-        for site_name, site_config in sites_to_crawl.items():
-            task = run_collection_for_site(site_name, site_config, api_call_time, session)
-            site_tasks.append(task)
+        if not site_tasks:
+            logger.warning("설정 파일에 수집할 사이트가 없습니다.")
+            return None
         
-        results = await asyncio.gather(*site_tasks, return_exceptions=True)
-        
-        for i, result in enumerate(results):
-            site_name = list(sites_to_crawl.keys())[i]
-            if isinstance(result, Exception):
-                logger.error(f"'{site_name}' 사이트 처리 중 심각한 오류 발생: {result}", exc_info=result)
-            else:
-                total_files_saved += result
+        results = await asyncio.gather(*site_tasks)
 
-    logger.info(f"전체 뉴스 수집 파이프라인 완료. 총 {total_files_saved}개의 기사가 로컬에 저장되었습니다.")
-    return total_files_saved
+    total_files_saved = sum(results)
+    logger.info(f"전체 수집 완료. 총 {total_files_saved}개의 기사를 GCS에 저장했습니다.")
+    
+    if total_files_saved > 0:
+        logger.info(f"데이터 GCS 저장 위치: gs://{GCS_BUCKET_NAME}/{gcs_output_prefix}")
+        return gcs_output_prefix
+    else:
+        logger.info("새롭게 수집된 기사가 없습니다.")
+        return None
 
 async def main():
     """
@@ -341,9 +356,12 @@ async def main():
     """
     setup_logger()
     
-    print("스크립트 직접 실행: 전체 뉴스 수집 파이프라인 (로컬 저장) 시작...")
-    saved_count = await run_collection_pipeline()
-    print(f"\n스크립트 실행 완료. 총 {saved_count}개의 기사가 로컬에 저장되었습니다.")
+    print("스크립트 직접 실행: 전체 뉴스 수집 파이프라인 (GCS 저장) 시작...")
+    saved_dir = await run_collection_pipeline()
+    if saved_dir:
+        print(f"\n스크립트 실행 완료. 총 {saved_dir}에 {saved_dir.count('/')}개의 기사가 GCS에 저장되었습니다.")
+    else:
+        print("\n스크립트 실행 완료. 새롭게 수집된 기사가 없습니다.")
 
 if __name__ == "__main__":
     if sys.platform == "win32" and sys.version_info >= (3, 8):

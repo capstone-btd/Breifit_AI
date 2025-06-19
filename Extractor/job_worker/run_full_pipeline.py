@@ -1,39 +1,44 @@
-import subprocess
-import sys
+import asyncio
 import os
+import sys
 
-def main():
-    """
-    기능:
-    데이터 수집 및 처리 파이프라인 전체를 실행. run_collection.py, run_processing.py 실행
+# 현재 파일의 디렉토리를 기준으로 프로젝트 루트 경로를 찾아 sys.path에 추가
+# 이렇게 하면 Extractor/job_worker 폴더 어디에서 실행하든 모듈을 찾을 수 있습니다.
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
 
-    input:
-    없음
+from scripts.run_collection import run_collection_pipeline
+from scripts.run_processing import run_processing_pipeline
+from src.utils.logger import setup_logger
 
-    output:
-    없음
-    """
+async def main():
+    logger = setup_logger(name="pipeline_coordinator", level="INFO")
+    logger.info("======= 전체 데이터 파이프라인 작업을 시작합니다 =======")
+
+    # --- 1단계: 데이터 수집 ---
+    logger.info("[PIPELINE] 1단계 시작: 데이터 수집")
+    collection_output_dir = await run_collection_pipeline()
+    
+    if not collection_output_dir:
+        logger.info("[PIPELINE] 1단계 완료: 새로 수집된 데이터가 없어 파이프라인을 종료합니다.")
+        return
+    
+    logger.info(f"[PIPELINE] 1단계 완료: 데이터 수집 완료. 결과물 위치: {collection_output_dir}")
+
+    # --- 2단계: 데이터 처리 및 저장 ---
+    logger.info("[PIPELINE] 2단계 시작: 데이터 처리 및 DB 저장")
     try:
-        collection_script_path = os.path.join(os.path.dirname(__file__), 'scripts', 'run_collection.py')
-        print("Starting data collection...")
-        subprocess.run([sys.executable, collection_script_path], check=True)
-        print("Data collection finished successfully.")
-
-        processing_script_path = os.path.join(os.path.dirname(__file__), 'scripts', 'run_processing.py')
-        print("Starting data processing...")
-        subprocess.run([sys.executable, processing_script_path], check=True)
-        print("Data processing finished successfully.")
-
-        print("Full pipeline completed successfully.")
-
-    except subprocess.CalledProcessError as e:
-        print(f"An error occurred during script execution: {e}")
+        run_processing_pipeline(collection_output_dir)
+        logger.info("[PIPELINE] 2단계 완료: 데이터 처리 성공.")
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        logger.error(f"[PIPELINE] 2단계 실행 중 심각한 오류 발생: {e}", exc_info=True)
+
+    logger.info("======= 전체 데이터 파이프라인 작업이 성공적으로 완료되었습니다 =======")
 
 if __name__ == "__main__":
-    # Add the project root to the Python path to allow for absolute imports
-    # from src, DB, etc.
-    project_root = os.path.dirname(os.path.abspath(__file__))
-    sys.path.append(project_root)
-    main() 
+    # Windows에서 asyncio 이벤트 루프 정책 설정 (Jupyter 환경 등에서 발생하는 에러 방지)
+    if sys.platform == 'win32':
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    
+    asyncio.run(main()) 

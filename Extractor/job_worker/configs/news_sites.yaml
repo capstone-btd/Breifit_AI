@@ -24,7 +24,8 @@ sites:
       스포츠: ["uk/sport","football"]
       IT: ["uk/technology","science"]
       경제: "uk/business"
-      
+
+  추후에 추가 예정(좀 스크랩하다보면 제한걸림)
   the_times:
     base_url: "https://www.thetimes.co.uk"
     categories:

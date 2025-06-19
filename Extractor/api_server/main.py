@@ -19,23 +19,8 @@ async def startup_event():
     """
     기능: FastAPI 서버가 시작될 때 Playwright 브라우저 인스턴스를 시작합니다.
     """
+    # Dockerfile에서 브라우저를 미리 설치하므로, 시작 시에는 브라우저만 실행합니다.
     await start_browser()
-    # Playwright의 브라우저 실행 파일 설치 (Docker 환경에서 필요)
-    # 로컬에서 실행할 때는 보통 필요없지만, Dockerfile에서 설치하도록 권장됩니다.
-    # 여기서는 안전하게 호출해줍니다.
-    try:
-        process = await asyncio.create_subprocess_shell(
-            "playwright install --with-deps",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await process.communicate()
-        if process.returncode != 0:
-            print(f"Playwright install failed: {stderr.decode()}")
-        else:
-            print(f"Playwright install successful: {stdout.decode()}")
-    except Exception as e:
-        print(f"An error occurred during playwright install: {e}")
 
 
 @app.on_event("shutdown")
@@ -56,7 +41,7 @@ async def read_root():
     return {"message": "Welcome to the Extractor API Server!"}
 
 
-@app.get("/trends", 
+@app.get("/trends/korea", 
          response_model=List[Dict[str, Any]],
          summary="Get Google Trends",
          description="Google Trends 페이지에서 최신 인기 검색어 목록을 스크레이핑하여 반환합니다.")

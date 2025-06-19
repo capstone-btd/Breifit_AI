@@ -22,12 +22,12 @@ async def get_trending_keywords(browser: Browser) -> List[Dict[str, Any]]:
         cookie_button_selector = "button[aria-label='모두 동의']"
         try:
             await page.wait_for_selector(cookie_button_selector, timeout=5000)
-            print("[trends]    - '모두 동의' 버튼을 발견하여 클릭합니다.")
+            print("[trends]     - '모두 동의' 버튼을 발견하여 클릭합니다.")
             await page.click(cookie_button_selector)
             await page.wait_for_load_state('domcontentloaded', timeout=5000)
-            print("[trends]    - 쿠키 팝업 처리가 완료되었습니다.")
+            print("[trends]     - 쿠키 팝업 처리가 완료되었습니다.")
         except Exception:
-            print("[trends]    - 쿠키 동의 팝업이 없거나 이미 처리되었습니다. 계속 진행합니다.")
+            print("[trends]     - 쿠키 동의 팝업이 없거나 이미 처리되었습니다. 계속 진행합니다.")
 
         print("[trends] 4. 실제 데이터가 로드되기를 기다립니다.")
         target_selector = "tbody[jsname='cC57zf'] tr[jsname='oKdM2c']"
@@ -93,4 +93,10 @@ async def get_trending_keywords(browser: Browser) -> List[Dict[str, Any]]:
             results.append({"keyword": keyword, "search_volume": numeric_volume})
             
     print(f"[trends] 총 {len(results)}개의 트렌드 키워드를 성공적으로 추출했습니다.")
-    return results 
+    
+    sorted_results = sorted(results, key=lambda item: item['search_volume'], reverse=True)
+    final_results = sorted_results[:20]
+    
+    print(f"[trends] search_volume 상위 {len(final_results)}개를 반환합니다.")
+
+    return final_results

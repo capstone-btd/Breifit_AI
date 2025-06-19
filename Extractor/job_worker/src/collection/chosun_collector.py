@@ -6,6 +6,7 @@ import os
 import asyncio
 import re
 import random
+from src.utils.browser_manager import get_browser_manager
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DEFAULT_CONFIG_PATH = os.path.join(PROJECT_ROOT, 'configs', 'news_sites.yaml')
@@ -15,7 +16,7 @@ class ChosunCollector(BaseCollector):
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 config_data = yaml.safe_load(f)
-            site_config = config_data['sites']['chosun']
+            site_config = config_data['sites']['조선일보']
             base_url = site_config['base_url']
         except Exception as e:
             print(f"[ChosunCollector] 설정 파일 로드 오류 ({config_path}): {e}. 기본 base_url을 사용합니다.")
@@ -35,24 +36,25 @@ class ChosunCollector(BaseCollector):
                 html_content = await response.text()
             soup = BeautifulSoup(html_content, 'html.parser')
             
-            # 조선일보 카테고리 페이지 구조에 맞는 선택자로 수정
-            # story-card-container 내부의 a 태그 (headline)
-            article_cards = soup.select('div.story-card-container')
-            for card in article_cards:
-                link_tag = card.select_one('a.story-card__headline')
-                if link_tag:
-                    href = link_tag.get('href')
-                    title_tag = link_tag.select_one('span')
-                    title = title_tag.get_text(strip=True) if title_tag else link_tag.get_text(strip=True)
+            # 페이지 전체에서 'a.story-card__headline' 클래스를 가진 링크를 직접 찾습니다.
+            headline_links = soup.select('a.story-card__headline')
 
-                    if href and title:
-                        # 상대 경로일 경우 절대 경로로 변환
-                        if href.startswith('/'):
-                            href = self.base_url + href
-                        
-                        # 해당 사이트의 기사인지 확인 (base_url로 시작하는지)
-                        if href.startswith(self.base_url):
-                            article_infos.append({'title': title, 'url': href})
+            if not headline_links:
+                 print(f"[{self.site_name}] Warning: 'a.story-card__headline' 링크를 찾을 수 없습니다. {category_url}의 구조가 변경되었을 수 있습니다.")
+
+            for link_tag in headline_links:
+                href = link_tag.get('href')
+                title_tag = link_tag.select_one('span')
+                title = title_tag.get_text(strip=True) if title_tag else link_tag.get_text(strip=True)
+
+                if href and title:
+                    # 상대 경로일 경우 절대 경로로 변환
+                    if href.startswith('/'):
+                        href = self.base_url + href
+                    
+                    # 해당 사이트의 기사인지 확인 (base_url로 시작하는지)
+                    if href.startswith(self.base_url):
+                        article_infos.append({'title': title, 'url': href})
             
             unique_articles = {info['url']: info for info in article_infos}.values()
             article_infos = list(unique_articles)
@@ -64,10 +66,17 @@ class ChosunCollector(BaseCollector):
     async def fetch_article_content(self, session: aiohttp.ClientSession, article_url: str, original_title: str, category: str) -> dict | None:
         await asyncio.sleep(random.uniform(1, 3))
         print(f"[{self.site_name.upper()}/{category.upper()}] 기사 내용 가져오기 시작: {original_title} ({article_url})")
+        
+        browser_manager = get_browser_manager()
+        page = None
         try:
-            async with session.get(article_url, headers=self.headers, timeout=30) as response:
-                response.raise_for_status()
-                html_content = await response.text()
+            page = await browser_manager.get_page()
+            await page.goto(article_url, wait_until="domcontentloaded", timeout=30000)
+            
+            # 페이지가 특정 선택자를 기다리도록 설정 (동적 컨텐츠 로딩 대기)
+            await page.wait_for_selector('section.article-body', timeout=15000)
+
+            html_content = await page.content()
             soup = BeautifulSoup(html_content, 'html.parser')
             
             # 제목 (여러 가능한 선택자 조합)
@@ -85,58 +94,42 @@ class ChosunCollector(BaseCollector):
                     article_title = title_tag.get_text(strip=True)
                     break
             
-            # 본문 (여러 가능한 선택자 조합)
-            # 우선적으로 새로운 HTML 구조에 맞는 선택자 시도
+            # 본문
             article_text = ""
-            article_body_tag = soup.select_one('section.article-body[itemprop="articleBody"]')
+            article_body_tag = soup.select_one('section.article-body')
             
             if article_body_tag:
-                # 불필요한 태그 제거 (광고, 관련기사, 이미지 캡션 등)
-                for unwanted_tag in article_body_tag.select('div.arcad-wrapper, div.dfpAd, div.article-body__content-rawhtml, div#a22, style, script, aside, .related_news, .ad_wrap, figure.article-body__content-image'):
-                    unwanted_tag.decompose()
+                # 불필요한 태그 제거 (광고, 관련기사, 이미지, 비디오 등)
+                elements_to_remove = article_body_tag.select(
+                    'div.arcad-wrapper, div.dfpAd, div.article-body__content-rawhtml, '
+                    'div#a22, style, script, aside, .related_news, .ad_wrap, '
+                    'figure, div.story-card-container, '
+                    'div[class*="video-container"], div.player-wrapper'
+                )
+                for element in elements_to_remove:
+                    element.decompose()
                 
-                # 특정 클래스를 가진 p 태그들만 선택
-                paragraphs = article_body_tag.select('p.article-body__content.article-body__content-text')
-                for p in paragraphs:
-                    article_text += p.get_text(strip=True) + "\n"
+                # 제공된 클래스 이름을 가진 p 태그들만 선택
+                paragraphs = article_body_tag.select('p.article-body__content-text')
+                
+                if paragraphs:
+                    temp_texts = [p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True)]
+                    article_text = "\n\n".join(temp_texts)
 
-            # 새로운 선택자로 본문을 찾지 못한 경우 기존 로직 수행
+            # 위 선택자로 본문을 찾지 못한 경우 대체 로직 수행
             if not article_text.strip():
-                body_selectors = [
-                    'section.article_body', 
-                    'div.article_body', 
-                    'div.news_text',
-                    'article[class*="article-body"]', 
-                    'div[itemprop="articleBody"]' 
-                ]
-                article_body_tag_old = None
-                for selector in body_selectors:
-                    article_body_tag_old = soup.select_one(selector)
-                    if article_body_tag_old:
-                        break
+                print(f"[{self.site_name}] Info: Primary parsing failed for {article_url}. Trying fallback methods.")
                 
-                if article_body_tag_old:
-                    # 불필요한 태그 제거 (광고, 관련기사, 이미지 캡션 등)
-                    for unwanted_tag in article_body_tag_old.select('div.arcad-wrapper, div.dfpAd, div.article-body__content-rawhtml, div#a22, style, script, aside, .related_news, .ad_wrap, figure.article-body__content-image'):
-                        unwanted_tag.decompose()
+                # article_body_tag를 다시 사용하되, 이번엔 모든 p 태그를 대상으로 함
+                if article_body_tag:
+                    all_paragraphs = article_body_tag.find_all('p', recursive=True)
+                    text_parts = [p.get_text(strip=True) for p in all_paragraphs if p.get_text(strip=True)]
+                    article_text = "\n\n".join(text_parts)
 
-                    paragraphs = article_body_tag_old.find_all('p', recursive=True) 
-                    if not paragraphs: 
-                        temp_text = article_body_tag_old.get_text(separator="\n", strip=True)
-                        if temp_text : paragraphs = [BeautifulSoup(f'<p>{line}</p>', 'html.parser').p for line in temp_text.split('\n') if line.strip()]
-
-                    for p in paragraphs:
-                        if p: 
-                             article_text += p.get_text(strip=True) + "\n"
-            
-            if not article_text.strip(): 
-                # 최후의 수단: body 전체에서 텍스트 추출 (매우 비효율적일 수 있음)
-                print(f"[{self.site_name}] Warning: Could not find specific article body for {article_url}. Trying to extract from body.")
-                body_tag = soup.find('body')
-                if body_tag:
-                    article_text = body_tag.get_text(separator="\n", strip=True)
-                if not article_text.strip(): # 그래도 없으면 원래 제목이라도 넣음
-                     article_text = original_title
+            # 모든 방법이 실패한 경우
+            if not article_text.strip():
+                 print(f"[{self.site_name}] Error: All parsing failed for {article_url}. Using title as body.")
+                 article_text = original_title
 
             # 대표 이미지
             main_image_url = None
@@ -144,9 +137,9 @@ class ChosunCollector(BaseCollector):
             if og_image_tag and og_image_tag.get('content'):
                 main_image_url = og_image_tag['content']
             else:
-                # 본문 내 첫번째 이미지 시도
-                if article_body_tag:
-                    img_tag = article_body_tag.find('img')
+                img_body_tag = soup.select_one('section.article-body[itemprop="articleBody"]')
+                if img_body_tag:
+                    img_tag = img_body_tag.find('img')
                     if img_tag and img_tag.get('src'):
                         main_image_url = img_tag['src']
                         if main_image_url.startswith('//'):
@@ -169,12 +162,12 @@ class ChosunCollector(BaseCollector):
         except asyncio.TimeoutError:
             print(f"[{self.site_name.upper()}/{category.upper()}] 기사 페이지 로딩 시간 초과: {article_url}")
             return None
-        except aiohttp.ClientError as e:
-            print(f"[{self.site_name.upper()}/{category.upper()}] 기사 페이지 로딩 중 ClientError: {e}, URL: {article_url}")
-            return None
         except Exception as e:
             print(f"[{self.site_name.upper()}/{category.upper()}] HTML 가져오는 중 알 수 없는 오류 ({article_url}): {e}")
             return None
+        finally:
+            if page:
+                await browser_manager.release_page(page)
 
     def get_news_urls_for_category(self, category_url):
         """

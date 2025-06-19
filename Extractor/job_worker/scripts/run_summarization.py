@@ -5,7 +5,7 @@ python scripts/generate.py --text_file sample.txt
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import argparse, pathlib, textwrap
 
-CKPT = "../models/summarization"      # 학습 후 경로
+CKPT = "../models/summarization"
 
 def summarize(article_path):
     text = pathlib.Path(article_path).read_text(encoding="utf-8").strip()

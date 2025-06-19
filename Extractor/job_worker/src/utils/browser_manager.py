@@ -1,60 +1,97 @@
-from playwright.async_api import async_playwright, Browser, Playwright
+from playwright.async_api import async_playwright, Browser, Playwright, Page
 from typing import Optional
+import asyncio
 
-# FastAPI 애플리케이션 전체에서 공유될 단일 인스턴스
-_playwright: Optional[Playwright] = None
-_browser: Optional[Browser] = None
+# --- For FastAPI server ---
+_playwright_fastapi: Optional[Playwright] = None
+_browser_fastapi: Optional[Browser] = None
 
 async def start_browser():
     """
-    전역 Playwright 및 Browser 인스턴스를 시작합니다. (비동기 방식)
-    서버 시작 시 한번만 호출됩니다.
+    FastAPI 서버를 위한 전역 Playwright 및 Browser 인스턴스를 시작합니다.
     """
-    global _playwright, _browser
-    if _browser is None:
-        print("[BrowserManager] Playwright (Async)를 시작하고 브라우저를 실행합니다...")
-        try:
-            _playwright = await async_playwright().start()
-            _browser = await _playwright.chromium.launch(headless=True)
-            print("[BrowserManager] 브라우저가 성공적으로 실행되었습니다.")
-        except Exception as e:
-            print(f"[BrowserManager] 브라우저 시작 중 오류 발생: {e}")
-            if _playwright:
-                await _playwright.stop()
-            _playwright = None
-            _browser = None
+    global _playwright_fastapi, _browser_fastapi
+    if _browser_fastapi is None:
+        print("[BrowserManager] FastAPI 서버용 브라우저를 시작합니다...")
+        _playwright_fastapi = await async_playwright().start()
+        _browser_fastapi = await _playwright_fastapi.chromium.launch(headless=True)
+        print("[BrowserManager] FastAPI 서버용 브라우저가 성공적으로 실행되었습니다.")
 
 async def stop_browser():
     """
-    전역 Browser 및 Playwright 인스턴스를 중지합니다. (비동기 방식)
-    서버 종료 시 한번만 호출됩니다.
+    FastAPI 서버를 위한 전역 Browser 및 Playwright 인스턴스를 중지합니다.
     """
-    global _playwright, _browser
-    if _browser:
-        try:
-            print("[BrowserManager] 브라우저를 닫습니다...")
-            await _browser.close()
-        except Exception as e:
-            print(f"[BrowserManager] 브라우저를 닫는 중 오류 발생: {e}")
-        finally:
-            _browser = None
-
-    if _playwright:
-        try:
-            print("[BrowserManager] Playwright를 중지합니다...")
-            await _playwright.stop()
-        except Exception as e:
-            print(f"[BrowserManager] Playwright를 중지하는 중 오류 발생: {e}")
-        finally:
-            _playwright = None
-    print("[BrowserManager] 모든 브라우저 리소스가 정리되었습니다.")
-
+    global _playwright_fastapi, _browser_fastapi
+    if _browser_fastapi:
+        await _browser_fastapi.close()
+        _browser_fastapi = None
+    if _playwright_fastapi:
+        await _playwright_fastapi.stop()
+        _playwright_fastapi = None
+    print("[BrowserManager] FastAPI 서버용 브라우저 리소스가 정리되었습니다.")
 
 def get_browser() -> Optional[Browser]:
     """
-    실행 중인 전역 브라우저 인스턴스를 반환합니다.
+    FastAPI 서버에서 실행 중인 전역 브라우저 인스턴스를 반환합니다.
     """
-    if _browser is None:
-        print("[BrowserManager] 경고: 브라우저가 실행 중이 아니지만 요청이 들어왔습니다.")
-        return None
-    return _browser 
+    return _browser_fastapi
+
+
+# --- Singleton Pattern for Local Pipeline ---
+class BrowserManager:
+    """
+    로컬 파이프라인을 위한 Playwright 브라우저 인스턴스를 관리하는 싱글톤 클래스.
+    """
+    _instance = None
+    _playwright: Optional[Playwright] = None
+    _browser: Optional[Browser] = None
+    _lock = asyncio.Lock()
+    _active_pages = 0
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(BrowserManager, cls).__new__(cls)
+        return cls._instance
+
+    async def _get_browser(self) -> Browser:
+        async with self._lock:
+            if self._browser is None:
+                print("[BrowserManager] 로컬 파이프라인용 새 브라우저 인스턴스를 시작합니다...")
+                self._playwright = await async_playwright().start()
+                self._browser = await self._playwright.chromium.launch(headless=True)
+                print("[BrowserManager] 로컬 파이프라인용 브라우저가 성공적으로 실행되었습니다.")
+        return self._browser
+
+    async def get_page(self) -> Page:
+        browser = await self._get_browser()
+        async with self._lock:
+            self._active_pages += 1
+            print(f"[BrowserManager] 새 페이지를 제공합니다. (활성 페이지: {self._active_pages})")
+        return await browser.new_page()
+
+    async def release_page(self, page: Page):
+        await page.close()
+        should_shutdown = False
+        async with self._lock:
+            self._active_pages -= 1
+            print(f"[BrowserManager] 페이지를 닫았습니다. (활성 페이지: {self._active_pages})")
+            if self._active_pages == 0 and self._browser is not None:
+                should_shutdown = True
+        
+        if should_shutdown:
+            await self.shutdown()
+    
+    async def shutdown(self):
+        async with self._lock:
+            if self._browser:
+                print("[BrowserManager] 모든 작업이 완료되어 로컬 파이프라인용 브라우저를 종료합니다.")
+                await self._browser.close()
+                await self._playwright.stop()
+                self._browser = None
+                self._playwright = None
+
+def get_browser_manager() -> BrowserManager:
+    """
+    BrowserManager의 싱글톤 인스턴스를 반환하는 팩토리 함수.
+    """
+    return BrowserManager() 
