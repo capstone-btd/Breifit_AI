@@ -18,6 +18,10 @@ from bs4 import BeautifulSoup
 from newspaper import Article
 from urllib.parse import urlparse, parse_qs
 import ssl
+from dotenv import load_dotenv
+
+# .env 파일에서 환경 변수 로드
+load_dotenv()
 
 # --- 기존 모듈 및 설정 ---
 # 프로젝트 루트 경로 설정
@@ -39,11 +43,19 @@ NAVER_CLIENT_SECRET = os.getenv("NAVER_CLIENT_SECRET", "Il4qo4Qusq")
 NAVER_API_URL = "https://openapi.naver.com/v1/search/news.json"
 
 # --- 데이터베이스 설정 ---
-DB_HOST = os.getenv("DB_HOST", "capstone2.cy1i8asionul.us-east-1.rds.amazonaws.com")
-DB_PORT = int(os.getenv("DB_PORT", 3306))
-DB_NAME = os.getenv("DB_NAME", "briefit")
-DB_USER = os.getenv("DB_USER", "admin")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "chltjr123")
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = int(os.getenv("DB_PORT", 3306)) # 포트는 기본값을 유지해도 비교적 안전합니다.
+DB_NAME = os.getenv("DB_NAME")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+
+# 필수 환경 변수 확인
+required_env_vars = ["DB_HOST", "DB_NAME", "DB_USER", "DB_PASSWORD"]
+missing_vars = [var for var in required_env_vars if not os.getenv(var)]
+
+if missing_vars:
+    raise ValueError(f"필수 환경 변수가 설정되지 않았습니다: {', '.join(missing_vars)}")
+
 DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 engine = create_engine(DATABASE_URL)
