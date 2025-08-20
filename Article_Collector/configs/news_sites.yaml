@@ -1,0 +1,100 @@
+sites:
+  # cnn:
+  #   base_url: "https://edition.cnn.com"
+  #   categories:
+  #     세계: "world"
+  #     경제: "business"
+  #     IT: ["tech","science"]
+  #     스포츠: "sports"
+
+  # bbc:
+  #   base_url: "https://www.bbc.com"
+  #   categories:
+  #     세계: "news"
+  #     스포츠: "sport"
+  #     경제: "business"
+  #     IT: ["innovation/technology","innovation/artificial-intelligence"]
+  #     문화: "culture"
+
+  # the_guardian:
+  #   base_url: "https://www.theguardian.com"
+  #   categories:
+  #     세계: "world"
+  #     문화: "uk/culture"
+  #     스포츠: ["uk/sport","football"]
+  #     IT: ["uk/technology","science"]
+  #     경제: "uk/business"
+
+  # ### 추후에 추가 예정(좀 스크랩하다보면 제한걸림)
+  # the_times:
+  #   base_url: "https://www.thetimes.co.uk"
+  #   categories:
+  #     세계: "world"
+  #     경제: "business-money"
+  #     스포츠: "sport"
+  #     문화: "culture"
+
+  # 연합뉴스:
+  #   base_url: "https://www.yna.co.kr"
+  #   categories:
+  #     정치: "politics/all"
+  #     경제: "economy/all"
+  #     사회: ["society/all", "local/all"]
+  #     세계: "international/all"
+  #     문화: "culture/all"
+  #     스포츠: "sports/all"
+  #     IT: "industry/technology-science"
+  #     연예: "entertainment/all"
+
+  조선일보:
+    base_url: "https://www.chosun.com"
+    categories:
+      정치: "politics"
+  #     경제: "economy"
+  #     사회: "national"
+  #     세계: "international"
+  #     문화: "culture-style"
+  #     스포츠: "sports"
+  #     연예: "entertainments/enter_general"
+
+  # 중앙일보:
+  #   base_url: "https://www.joongang.co.kr"
+  #   categories:
+  #     정치: "politics"
+  #     경제: "money"
+  #     사회: "society"
+  #     세계: "world"
+  #     문화: "culture"
+  #     스포츠: "sports"
+
+  # 동아일보:
+  #   base_url: "https://www.donga.com"
+  #   categories:
+  #     정치: "news/Politics"
+  #     경제: "news/Economy"
+  #     사회: "news/Society"
+  #     세계: "news/Inter"
+  #     문화: "news/Culture"
+  #     스포츠: "news/Sports"
+  #     연예: "news/Entertainment"
+  # 한겨레:
+  #   base_url: "https://www.hani.co.kr"
+  #   categories:
+  #     정치: "arti/politics"
+  #     경제: "arti/economy"
+  #     사회: ["arti/society", "arti/area"]
+  #     세계: "arti/international"
+  #     문화: "arti/culture"
+  #     스포츠: "arti/sports"
+  #     연예: "arti/culture/entertainment"
+
+  # 경향신문:
+  #   base_url: "https://www.khan.co.kr"
+  #   categories:
+  #     정치: "politics"
+  #     경제: "economy"
+  #     사회: "national"
+  #     세계: "world"
+  #     문화: "culture"
+  #     스포츠: "sports"
+  #     연예: "culture/tv/articles"

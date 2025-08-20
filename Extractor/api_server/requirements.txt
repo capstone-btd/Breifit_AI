@@ -1,6 +1,0 @@
-fastapi
-uvicorn
-playwright
-beautifulsoup4
-lxml 
-gunicorn

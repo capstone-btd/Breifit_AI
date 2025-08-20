@@ -1,0 +1,18 @@
+sites:
+  연합뉴스:
+    base_url: "https://www.yna.co.kr/search/index?query="
+  
+  조선일보:
+    base_url: "https://www.chosun.com/nsearch/?query="
+  
+  중앙일보:
+    base_url: "https://www.joongang.co.kr/search?keyword="
+
+  동아일보:
+    base_url: "https://www.donga.com/news/search?query="
+
+  한겨레:
+    base_url: "https://search.hani.co.kr/search?searchword="
+
+  경향신문:
+    base_url: "https://search.khan.co.kr/?q="

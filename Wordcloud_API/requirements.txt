@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+sqlalchemy
+PyMySQL
+python-dotenv
+beautifulsoup4
+selenium
+webdriver-manager
+requests
+pytrends
+pandas
+konlpy
+wordcloud
+matplotlib
+boto3 
